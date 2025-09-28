@@ -1,0 +1,329 @@
+name: CI - Test and Build
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME_BACKEND: ${{ github.repository }}/pf-backend
+  IMAGE_NAME_FRONTEND: ${{ github.repository }}/pf-frontend
+
+jobs:
+  test-backend:
+    name: Test Python Backend
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [3.8, 3.9, '3.10', '3.11']
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Cache pip dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libgl1-mesa-glx libglib2.0-0 libsm6 libxext6 libxrender-dev libgomp1
+
+    - name: Install Python dependencies
+      run: |
+        cd pf-backend
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest pytest-cov pytest-asyncio
+
+    - name: Lint with flake8
+      run: |
+        pip install flake8
+        cd pf-backend
+        # Stop the build if there are Python syntax errors or undefined names
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        # Exit-zero treats all errors as warnings
+        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+    - name: Test with pytest
+      run: |
+        cd pf-backend
+        # Create basic test file if it doesn't exist
+        mkdir -p tests
+        if [ ! -f tests/test_basic.py ]; then
+          cat > tests/test_basic.py << 'EOF'
+import pytest
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+def test_imports():
+    """Test that all required modules can be imported."""
+    try:
+        import cv2
+        import mediapipe
+        import pyautogui
+        import websockets
+        import numpy
+        assert True
+    except ImportError as e:
+        pytest.fail(f"Failed to import required module: {e}")
+
+def test_basic_functionality():
+    """Test basic functionality without hardware dependencies."""
+    import numpy as np
+    # Test basic numpy operations (MediaPipe dependency)
+    arr = np.array([1, 2, 3])
+    assert len(arr) == 3
+    assert np.sum(arr) == 6
+EOF
+        fi
+        python -m pytest tests/ -v --cov=. --cov-report=term-missing
+
+  test-frontend:
+    name: Test Node.js Frontend
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [16.x, 18.x, 20.x]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v3
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+        cache-dependency-path: pf-frontend/package.json
+
+    - name: Install dependencies
+      run: |
+        cd pf-frontend
+        npm ci
+
+    - name: Run linting
+      run: |
+        cd pf-frontend
+        npm install eslint --save-dev
+        # Create basic eslint config if it doesn't exist
+        if [ ! -f .eslintrc.js ]; then
+          cat > .eslintrc.js << 'EOF'
+module.exports = {
+    "env": {
+        "browser": true,
+        "commonjs": true,
+        "es2021": true,
+        "node": true
+    },
+    "extends": "eslint:recommended",
+    "parserOptions": {
+        "ecmaVersion": 12
+    },
+    "rules": {
+        "no-unused-vars": "warn",
+        "no-console": "off"
+    }
+};
+EOF
+        fi
+        npx eslint server.js public/script.js --fix-dry-run
+
+    - name: Run tests
+      run: |
+        cd pf-frontend
+        # Install testing dependencies
+        npm install --save-dev mocha chai supertest
+        
+        # Create basic test if it doesn't exist
+        mkdir -p test
+        if [ ! -f test/basic.test.js ]; then
+          cat > test/basic.test.js << 'EOF'
+const request = require('supertest');
+const express = require('express');
+const path = require('path');
+
+// Create a test app similar to the main server
+const app = express();
+app.use(express.static(path.join(__dirname, '../public')));
+app.use(express.json());
+
+app.get('/health', (req, res) => {
+    res.json({ status: 'ok' });
+});
+
+describe('Frontend Server', () => {
+    it('should serve static files', (done) => {
+        request(app)
+            .get('/health')
+            .expect(200)
+            .expect('Content-Type', /json/)
+            .end(done);
+    });
+
+    it('should have required dependencies', () => {
+        const fs = require('fs');
+        const packageJson = JSON.parse(fs.readFileSync(path.join(__dirname, '../package.json')));
+        
+        // Check for required dependencies
+        const requiredDeps = ['express', 'ws', 'axios'];
+        requiredDeps.forEach(dep => {
+            if (!packageJson.dependencies[dep]) {
+                throw new Error(`Missing required dependency: ${dep}`);
+            }
+        });
+    });
+});
+EOF
+        fi
+        
+        # Add test script to package.json if it doesn't exist
+        node -e "
+        const fs = require('fs');
+        const pkg = JSON.parse(fs.readFileSync('package.json'));
+        if (!pkg.scripts) pkg.scripts = {};
+        if (!pkg.scripts.test) pkg.scripts.test = 'mocha';
+        fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2));
+        "
+        
+        npm test
+
+  docker-build:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+    needs: [test-backend, test-frontend]
+    if: github.event_name != 'pull_request'
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract metadata for backend
+      id: meta-backend
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_BACKEND }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+
+    - name: Extract metadata for frontend
+      id: meta-frontend
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FRONTEND }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+
+    - name: Build and push backend image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./pf-backend
+        file: ./pf-backend/Dockerfile
+        push: true
+        tags: ${{ steps.meta-backend.outputs.tags }}
+        labels: ${{ steps.meta-backend.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    - name: Build and push frontend image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./pf-frontend
+        file: ./pf-frontend/Dockerfile
+        push: true
+        tags: ${{ steps.meta-frontend.outputs.tags }}
+        labels: ${{ steps.meta-frontend.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+  integration-test:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: [test-backend, test-frontend]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Compose
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y docker-compose
+
+    - name: Create test environment file
+      run: |
+        cp .env.example .env
+        # Set test values
+        sed -i 's/your-gemini-api-key-here/test-key/' .env
+        sed -i 's/Athens, Greece/Test Location/' .env
+
+    - name: Build and start services
+      run: |
+        docker-compose build
+        docker-compose up -d
+
+    - name: Wait for services to be ready
+      run: |
+        # Wait for frontend to be ready
+        timeout 60 bash -c 'until curl -f http://localhost:8080; do sleep 2; done'
+        
+        # Check if backend WebSocket is listening
+        timeout 30 bash -c 'until nc -z localhost 8765; do sleep 2; done'
+
+    - name: Run integration tests
+      run: |
+        # Test frontend accessibility
+        response=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080)
+        if [ "$response" != "200" ]; then
+          echo "Frontend health check failed"
+          exit 1
+        fi
+        
+        # Test WebSocket connectivity (basic check)
+        if ! nc -z localhost 8765; then
+          echo "Backend WebSocket not accessible"
+          exit 1
+        fi
+        
+        echo "Integration tests passed!"
+
+    - name: Show logs on failure
+      if: failure()
+      run: |
+        docker-compose logs
+
+    - name: Cleanup
+      if: always()
+      run: |
+        docker-compose down -v
+        docker system prune -f

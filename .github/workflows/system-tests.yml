@@ -1,0 +1,337 @@
+name: System Tests
+
+on:
+  schedule:
+    # Run system tests daily at 3 AM UTC
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+    inputs:
+      test_type:
+        description: 'Type of test to run'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - integration
+          - performance
+          - security
+
+jobs:
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    if: github.event.inputs.test_type == 'all' || github.event.inputs.test_type == 'integration' || github.event.inputs.test_type == ''
+
+    strategy:
+      matrix:
+        hardware_mode: [CPU, GPU]
+        language: [en, el]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up test environment
+      run: |
+        # Install system dependencies
+        sudo apt-get update
+        sudo apt-get install -y curl netcat-traditional
+
+    - name: Create test configuration
+      run: |
+        cp .env.example .env
+        echo "HARDWARE_MODE=${{ matrix.hardware_mode }}" >> .env
+        echo "LANGUAGE=${{ matrix.language }}" >> .env
+        echo "GEMINI_API_KEY=test-key" >> .env
+        echo "LOCATION=Test Location" >> .env
+
+    - name: Build and start services
+      run: |
+        docker-compose build
+        docker-compose up -d
+
+    - name: Wait for services
+      run: |
+        # Wait for frontend to be ready
+        timeout 120 bash -c 'until curl -f http://localhost:8080; do sleep 5; done'
+        
+        # Wait for WebSocket to be ready
+        timeout 60 bash -c 'until nc -z localhost 8765; do sleep 2; done'
+
+    - name: Test frontend endpoints
+      run: |
+        # Test main page
+        response=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080)
+        if [ "$response" != "200" ]; then
+          echo "❌ Main page failed: HTTP $response"
+          exit 1
+        fi
+        echo "✅ Main page accessible"
+        
+        # Test static assets
+        response=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/style.css)
+        if [ "$response" != "200" ]; then
+          echo "❌ CSS file failed: HTTP $response"
+          exit 1
+        fi
+        echo "✅ CSS file accessible"
+        
+        response=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/script.js)
+        if [ "$response" != "200" ]; then
+          echo "❌ JS file failed: HTTP $response"
+          exit 1
+        fi
+        echo "✅ JavaScript file accessible"
+
+    - name: Test language configuration
+      run: |
+        # Check if language file exists
+        response=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/languages/${{ matrix.language }}.json)
+        if [ "$response" != "200" ]; then
+          echo "❌ Language file failed: HTTP $response"
+          exit 1
+        fi
+        echo "✅ Language file ${{ matrix.language }}.json accessible"
+
+    - name: Test WebSocket connectivity
+      run: |
+        # Basic WebSocket connection test
+        if nc -z localhost 8765; then
+          echo "✅ WebSocket port is listening"
+        else
+          echo "❌ WebSocket port not accessible"
+          exit 1
+        fi
+
+    - name: Test container health
+      run: |
+        # Check container status
+        if docker-compose ps | grep -q "pf-backend.*Up"; then
+          echo "✅ Backend container is running"
+        else
+          echo "❌ Backend container not running"
+          docker-compose logs pf-backend
+          exit 1
+        fi
+        
+        if docker-compose ps | grep -q "pf-frontend.*Up"; then
+          echo "✅ Frontend container is running"
+        else
+          echo "❌ Frontend container not running"
+          docker-compose logs pf-frontend
+          exit 1
+        fi
+
+    - name: Show logs on failure
+      if: failure()
+      run: |
+        echo "=== Backend Logs ==="
+        docker-compose logs pf-backend
+        echo "=== Frontend Logs ==="
+        docker-compose logs pf-frontend
+
+    - name: Cleanup
+      if: always()
+      run: |
+        docker-compose down -v
+
+  performance-tests:
+    name: Performance Tests
+    runs-on: ubuntu-latest
+    if: github.event.inputs.test_type == 'all' || github.event.inputs.test_type == 'performance' || github.event.inputs.test_type == ''
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install performance testing tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y apache2-utils wrk
+
+    - name: Set up environment
+      run: |
+        cp .env.example .env
+        sed -i 's/your-gemini-api-key-here/test-key/' .env
+
+    - name: Build and start services
+      run: |
+        docker-compose build
+        docker-compose up -d
+
+    - name: Wait for services
+      run: |
+        timeout 120 bash -c 'until curl -f http://localhost:8080; do sleep 5; done'
+
+    - name: Run performance tests
+      run: |
+        echo "🚀 Starting performance tests..."
+        
+        # Test concurrent requests
+        echo "Testing concurrent requests..."
+        ab -n 100 -c 10 http://localhost:8080/ > performance_results.txt
+        
+        # Check average response time
+        avg_time=$(grep "Time per request:" performance_results.txt | head -1 | awk '{print $4}')
+        echo "Average response time: ${avg_time}ms"
+        
+        # Fail if average response time is too high (>2000ms)
+        if (( $(echo "$avg_time > 2000" | bc -l) )); then
+          echo "❌ Performance test failed: Response time too high"
+          cat performance_results.txt
+          exit 1
+        fi
+        
+        echo "✅ Performance tests passed"
+
+    - name: Test memory usage
+      run: |
+        echo "📊 Checking memory usage..."
+        docker stats --no-stream --format "table {{.Container}}\t{{.CPUPerc}}\t{{.MemUsage}}" > memory_stats.txt
+        cat memory_stats.txt
+        
+        # Check if any container is using excessive memory (>1GB)
+        if docker stats --no-stream --format "{{.MemUsage}}" | grep -q "G"; then
+          echo "⚠️ Warning: High memory usage detected"
+          cat memory_stats.txt
+        else
+          echo "✅ Memory usage within acceptable limits"
+        fi
+
+    - name: Cleanup
+      if: always()
+      run: |
+        docker-compose down -v
+
+  security-tests:
+    name: Security Tests
+    runs-on: ubuntu-latest
+    if: github.event.inputs.test_type == 'all' || github.event.inputs.test_type == 'security' || github.event.inputs.test_type == ''
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Build images
+      run: |
+        docker-compose build
+
+    - name: Run Trivy vulnerability scanner on backend
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: 'project-fone-containers_pf-backend:latest'
+        format: 'json'
+        output: 'backend-vulnerabilities.json'
+        exit-code: '0'  # Don't fail the build on vulnerabilities
+
+    - name: Run Trivy vulnerability scanner on frontend
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: 'project-fone-containers_pf-frontend:latest'
+        format: 'json'
+        output: 'frontend-vulnerabilities.json'
+        exit-code: '0'
+
+    - name: Analyze security results
+      run: |
+        echo "🔒 Security scan results:"
+        
+        # Check backend vulnerabilities
+        if [ -f backend-vulnerabilities.json ]; then
+          critical=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity == "CRITICAL")] | length' backend-vulnerabilities.json 2>/dev/null || echo "0")
+          high=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity == "HIGH")] | length' backend-vulnerabilities.json 2>/dev/null || echo "0")
+          echo "Backend - Critical: $critical, High: $high"
+        fi
+        
+        # Check frontend vulnerabilities
+        if [ -f frontend-vulnerabilities.json ]; then
+          critical=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity == "CRITICAL")] | length' frontend-vulnerabilities.json 2>/dev/null || echo "0")
+          high=$(jq '[.Results[]?.Vulnerabilities[]? | select(.Severity == "HIGH")] | length' frontend-vulnerabilities.json 2>/dev/null || echo "0")
+          echo "Frontend - Critical: $critical, High: $high"
+        fi
+
+    - name: Test for common security misconfigurations
+      run: |
+        echo "🔍 Checking for security misconfigurations..."
+        
+        # Start services
+        cp .env.example .env
+        sed -i 's/your-gemini-api-key-here/test-key/' .env
+        docker-compose up -d
+        
+        # Wait for services
+        timeout 60 bash -c 'until curl -f http://localhost:8080; do sleep 2; done'
+        
+        # Check for security headers
+        echo "Checking security headers..."
+        headers=$(curl -I http://localhost:8080 2>/dev/null)
+        
+        if echo "$headers" | grep -qi "x-frame-options"; then
+          echo "✅ X-Frame-Options header found"
+        else
+          echo "⚠️ X-Frame-Options header missing"
+        fi
+        
+        if echo "$headers" | grep -qi "x-content-type-options"; then
+          echo "✅ X-Content-Type-Options header found"
+        else
+          echo "⚠️ X-Content-Type-Options header missing"
+        fi
+        
+        # Check for exposed sensitive endpoints
+        echo "Checking for exposed sensitive endpoints..."
+        status=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/.env)
+        if [ "$status" != "404" ]; then
+          echo "❌ Sensitive file .env is accessible"
+          exit 1
+        else
+          echo "✅ Sensitive files are protected"
+        fi
+
+    - name: Upload security results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: security-scan-results
+        path: |
+          backend-vulnerabilities.json
+          frontend-vulnerabilities.json
+
+    - name: Cleanup
+      if: always()
+      run: |
+        docker-compose down -v
+
+  test-summary:
+    name: Test Summary
+    runs-on: ubuntu-latest
+    needs: [integration-tests, performance-tests, security-tests]
+    if: always()
+
+    steps:
+    - name: Generate test summary
+      run: |
+        echo "# 🧪 System Test Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        if [ "${{ needs.integration-tests.result }}" == "success" ]; then
+          echo "✅ Integration Tests: PASSED" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ Integration Tests: FAILED" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        if [ "${{ needs.performance-tests.result }}" == "success" ]; then
+          echo "✅ Performance Tests: PASSED" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ Performance Tests: FAILED" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        if [ "${{ needs.security-tests.result }}" == "success" ]; then
+          echo "✅ Security Tests: PASSED" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ Security Tests: FAILED" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Test Date:** $(date -u)" >> $GITHUB_STEP_SUMMARY

@@ -1,0 +1,229 @@
+name: CD - Release and Deploy
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release'
+        required: true
+        default: 'latest'
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME_BACKEND: ${{ github.repository }}/pf-backend
+  IMAGE_NAME_FRONTEND: ${{ github.repository }}/pf-frontend
+
+jobs:
+  build-and-publish:
+    name: Build and Publish Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Get version
+      id: version
+      run: |
+        if [ "${{ github.event_name }}" == "release" ]; then
+          VERSION=${{ github.event.release.tag_name }}
+        else
+          VERSION=${{ github.event.inputs.version }}
+        fi
+        echo "version=${VERSION}" >> $GITHUB_OUTPUT
+        echo "Version: ${VERSION}"
+
+    - name: Build and push backend image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./pf-backend
+        file: ./pf-backend/Dockerfile
+        push: true
+        tags: |
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_BACKEND }}:${{ steps.version.outputs.version }}
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_BACKEND }}:latest
+        labels: |
+          org.opencontainers.image.title=Project F.O.N.E Backend
+          org.opencontainers.image.description=Eye-tracking backend service
+          org.opencontainers.image.version=${{ steps.version.outputs.version }}
+          org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        platforms: linux/amd64,linux/arm64
+
+    - name: Build and push frontend image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./pf-frontend
+        file: ./pf-frontend/Dockerfile
+        push: true
+        tags: |
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FRONTEND }}:${{ steps.version.outputs.version }}
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FRONTEND }}:latest
+        labels: |
+          org.opencontainers.image.title=Project F.O.N.E Frontend
+          org.opencontainers.image.description=Web interface with virtual keyboard
+          org.opencontainers.image.version=${{ steps.version.outputs.version }}
+          org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        platforms: linux/amd64,linux/arm64
+
+    - name: Create deployment artifacts
+      run: |
+        mkdir -p release-artifacts
+        
+        # Copy essential files for deployment
+        cp docker-compose.yml release-artifacts/
+        cp .env.example release-artifacts/
+        cp README.md release-artifacts/
+        cp setup-ubuntu.sh release-artifacts/
+        cp run-ubuntu.sh release-artifacts/
+        cp run-kiosk.sh release-artifacts/
+        cp system-check.sh release-artifacts/
+        
+        # Create a production docker-compose.yml that uses the published images
+        cat > release-artifacts/docker-compose.prod.yml << EOF
+version: '3.8'
+
+services:
+  pf-backend:
+    image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_BACKEND }}:${{ steps.version.outputs.version }}
+    container_name: pfone-backend
+    environment:
+      - HARDWARE_MODE=\${HARDWARE_MODE:-CPU}
+      - DISPLAY=\${DISPLAY}
+    devices:
+      - /dev/video0:/dev/video0
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw
+      - /dev/shm:/dev/shm
+    network_mode: host
+    restart: unless-stopped
+    privileged: true
+
+  pf-frontend:
+    image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FRONTEND }}:${{ steps.version.outputs.version }}
+    container_name: pfone-frontend
+    ports:
+      - "8080:3000"
+    environment:
+      - GEMINI_API_KEY=\${GEMINI_API_KEY}
+      - LOCATION=\${LOCATION:-Unknown}
+      - WEBSOCKET_URL=ws://localhost:8765
+    depends_on:
+      - pf-backend
+    restart: unless-stopped
+
+networks:
+  default:
+    driver: bridge
+EOF
+        
+        # Create installation script for production deployment
+        cat > release-artifacts/install-production.sh << 'EOF'
+#!/bin/bash
+set -e
+
+echo "🚀 Installing Project F.O.N.E (Production)"
+echo "=========================================="
+
+# Check Docker
+if ! command -v docker &> /dev/null; then
+    echo "❌ Docker is not installed. Please install Docker first."
+    exit 1
+fi
+
+if ! command -v docker-compose &> /dev/null; then
+    echo "❌ Docker Compose is not installed. Please install Docker Compose first."
+    exit 1
+fi
+
+# Create .env if it doesn't exist
+if [ ! -f .env ]; then
+    cp .env.example .env
+    echo "⚠️  Created .env file. Please edit it with your API keys and settings:"
+    echo "   nano .env"
+    echo ""
+fi
+
+# Pull latest images
+echo "📦 Pulling latest Docker images..."
+docker-compose -f docker-compose.prod.yml pull
+
+# Set up X11 permissions
+echo "🔧 Setting up X11 permissions..."
+xhost +local:docker
+
+echo "✅ Installation complete!"
+echo ""
+echo "To start the system:"
+echo "  docker-compose -f docker-compose.prod.yml up -d"
+echo ""
+echo "To stop the system:"
+echo "  docker-compose -f docker-compose.prod.yml down"
+EOF
+        chmod +x release-artifacts/install-production.sh
+        
+        # Create archive
+        tar -czf project-fone-${{ steps.version.outputs.version }}-deployment.tar.gz -C release-artifacts .
+
+    - name: Upload release artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: deployment-package-${{ steps.version.outputs.version }}
+        path: |
+          project-fone-${{ steps.version.outputs.version }}-deployment.tar.gz
+          release-artifacts/
+
+    - name: Attach to release
+      if: github.event_name == 'release'
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./project-fone-${{ steps.version.outputs.version }}-deployment.tar.gz
+        asset_name: project-fone-${{ steps.version.outputs.version }}-deployment.tar.gz
+        asset_content_type: application/gzip
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: build-and-publish
+    
+    steps:
+    - name: Run Trivy vulnerability scanner - Backend
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_BACKEND }}:latest
+        format: 'sarif'
+        output: 'backend-trivy-results.sarif'
+
+    - name: Run Trivy vulnerability scanner - Frontend
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FRONTEND }}:latest
+        format: 'sarif'
+        output: 'frontend-trivy-results.sarif'
+
+    - name: Upload Trivy scan results to GitHub Security
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: '.'

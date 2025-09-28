@@ -1,0 +1,22 @@
+# Dependency Review Action Configuration
+# This file configures the GitHub dependency review action
+
+# Fail the action if vulnerabilities with severity level 'critical' or 'high' are detected
+fail-on-severity: high
+
+# Fail the action if the scanned package has an existing advisory
+deny-license:
+  # Licenses that are not allowed
+  - GPL-2.0
+  - GPL-3.0
+
+# Allow only these licenses
+allow-licenses:
+  - MIT
+  - Apache-2.0
+  - BSD-2-Clause
+  - BSD-3-Clause
+  - ISC
+
+# Skip vulnerabilities in development dependencies
+allow-dependencies-licenses: true
