@@ -98,9 +98,8 @@ jobs:
         cp system-check.sh release-artifacts/
         
         # Create a production docker-compose.yml that uses the published images
-        cat > release-artifacts/docker-compose.prod.yml <<EOF
+        cat > release-artifacts/docker-compose.prod.yml << EOF
 version: '3.8'
-
 services:
   pf-backend:
     image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_BACKEND }}:${{ steps.version.outputs.version }}
@@ -116,7 +115,6 @@ services:
     network_mode: host
     restart: unless-stopped
     privileged: true
-
   pf-frontend:
     image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_FRONTEND }}:${{ steps.version.outputs.version }}
     container_name: pfone-frontend
@@ -129,31 +127,26 @@ services:
     depends_on:
       - pf-backend
     restart: unless-stopped
-
 networks:
   default:
     driver: bridge
 EOF
 
         # Create installation script for production deployment
-        cat > release-artifacts/install-production.sh <<'EOF'
+        cat > release-artifacts/install-production.sh << 'EOF'
 #!/bin/bash
 set -e
-
 echo "🚀 Installing Project F.O.N.E (Production)"
 echo "=========================================="
-
 # Check Docker
 if ! command -v docker &> /dev/null; then
     echo "❌ Docker is not installed. Please install Docker first."
     exit 1
 fi
-
 if ! command -v docker-compose &> /dev/null; then
     echo "❌ Docker Compose is not installed. Please install Docker Compose first."
     exit 1
 fi
-
 # Create .env if it doesn't exist
 if [ ! -f .env ]; then
     cp .env.example .env
@@ -161,15 +154,12 @@ if [ ! -f .env ]; then
     echo "   nano .env"
     echo ""
 fi
-
 # Pull latest images
 echo "📦 Pulling latest Docker images..."
 docker-compose -f docker-compose.prod.yml pull
-
 # Set up X11 permissions
 echo "🔧 Setting up X11 permissions..."
 xhost +local:docker
-
 echo "✅ Installation complete!"
 echo ""
 echo "To start the system:"
