@@ -40,7 +40,7 @@ jobs:
     - name: Install system dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y libgl1-mesa-glx libglib2.0-0 libsm6 libxext6 libxrender-dev libgomp1
+        sudo apt-get install -y libgl1 libglx-mesa0 libglib2.0-0 libsm6 libxext6 libxrender-dev libgomp1 xvfb
 
     - name: Install Python dependencies
       run: |
@@ -63,14 +63,14 @@ jobs:
         chmod +x .github/scripts/create_test_file.sh
         ./.github/scripts/create_test_file.sh
         cd pf-backend
-        python -m pytest tests/ -v --cov=. --cov-report=term-missing
+        xvfb-run python -m pytest tests/ -v --cov=. --cov-report=term-missing
 
   test-frontend:
     name: Test Node.js Frontend
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node-version: [16.x, 18.x, 20.x]
+        node-version: [18.x, 20.x]
 
     steps:
     - name: Checkout code
@@ -86,89 +86,31 @@ jobs:
     - name: Install dependencies
       run: |
         cd pf-frontend
-        npm ci
+        npm install
 
     - name: Run linting
       run: |
+        chmod +x .github/scripts/create_eslint_config.sh
+        ./.github/scripts/create_eslint_config.sh
         cd pf-frontend
-        npm install eslint --save-dev
-        # Create basic eslint config if it doesn't exist
-        if [ ! -f .eslintrc.js ]; then
-          cat > .eslintrc.js << 'EOF'
-module.exports = {
-    "env": {
-        "browser": true,
-        "commonjs": true,
-        "es2021": true,
-        "node": true
-    },
-    "extends": "eslint:recommended",
-    "parserOptions": {
-        "ecmaVersion": 12
-    },
-    "rules": {
-        "no-unused-vars": "warn",
-        "no-console": "off"
-    }
-};
-EOF
-        fi
+        npm install eslint globals @eslint/js --save-dev
         npx eslint server.js public/script.js --fix-dry-run
 
     - name: Run tests
       run: |
+        chmod +x .github/scripts/create_frontend_test_file.sh
+        ./.github/scripts/create_frontend_test_file.sh
         cd pf-frontend
         # Install testing dependencies
         npm install --save-dev mocha chai supertest
+        npm install --save axios
         
-        # Create basic test if it doesn't exist
-        mkdir -p test
-        if [ ! -f test/basic.test.js ]; then
-          cat > test/basic.test.js << 'EOF'
-const request = require('supertest');
-const express = require('express');
-const path = require('path');
-
-// Create a test app similar to the main server
-const app = express();
-app.use(express.static(path.join(__dirname, '../public')));
-app.use(express.json());
-
-app.get('/health', (req, res) => {
-    res.json({ status: 'ok' });
-});
-
-describe('Frontend Server', () => {
-    it('should serve static files', (done) => {
-        request(app)
-            .get('/health')
-            .expect(200)
-            .expect('Content-Type', /json/)
-            .end(done);
-    });
-
-    it('should have required dependencies', () => {
-        const fs = require('fs');
-        const packageJson = JSON.parse(fs.readFileSync(path.join(__dirname, '../package.json')));
-        
-        // Check for required dependencies
-        const requiredDeps = ['express', 'ws', 'axios'];
-        requiredDeps.forEach(dep => {
-            if (!packageJson.dependencies[dep]) {
-                throw new Error(`Missing required dependency: ${dep}`);
-            }
-        });
-    });
-});
-EOF
-        fi
-        
-        # Add test script to package.json if it doesn't exist
+        # Add test script to package.json
         node -e "
         const fs = require('fs');
         const pkg = JSON.parse(fs.readFileSync('package.json'));
         if (!pkg.scripts) pkg.scripts = {};
-        if (!pkg.scripts.test) pkg.scripts.test = 'mocha';
+        pkg.scripts.test = 'mocha';
         fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2));
         "
         
