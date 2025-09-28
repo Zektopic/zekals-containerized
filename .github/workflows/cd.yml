@@ -48,7 +48,7 @@ jobs:
 
     - name: Generate lowercase repository name
       id: repo_name
-      run: echo "name=${{ github.repository | tolower }}" >> $GITHUB_OUTPUT
+      run: echo "name=${{ tolower(github.repository) }}" >> $GITHUB_OUTPUT
 
     - name: Build and push backend image
       uses: docker/build-push-action@v5
