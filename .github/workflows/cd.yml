@@ -93,7 +93,7 @@ jobs:
           ${{ env.IMAGE_NAME_FRONTEND }}
 
     - name: Upload release artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: deployment-package-${{ steps.version.outputs.version }}
         path: |
