@@ -9,7 +9,7 @@ RUN apt-get update && apt-get install -y \
     libxrender-dev \
     libgomp1 \
     libgtk-3-0 \
-    libgl1-mesa-glx \
+    libgl1 \
     libgstreamer1.0-0 \
     python3-tk \
     python3-dev \
