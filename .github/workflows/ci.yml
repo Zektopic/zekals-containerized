@@ -104,12 +104,12 @@ jobs:
         # Install testing dependencies
         npm install --save-dev mocha chai supertest
         
-        # Add test script to package.json if it doesn't exist
+        # Add test script to package.json
         node -e "
         const fs = require('fs');
         const pkg = JSON.parse(fs.readFileSync('package.json'));
         if (!pkg.scripts) pkg.scripts = {};
-        if (!pkg.scripts.test) pkg.scripts.test = 'mocha';
+        pkg.scripts.test = 'mocha';
         fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2));
         "
         
