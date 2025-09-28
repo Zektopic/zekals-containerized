@@ -98,7 +98,7 @@ jobs:
         cp system-check.sh release-artifacts/
         
         # Create a production docker-compose.yml that uses the published images
-        cat > release-artifacts/docker-compose.prod.yml << EOF
+        cat > release-artifacts/docker-compose.prod.yml <<EOF
 version: '3.8'
 
 services:
@@ -134,9 +134,9 @@ networks:
   default:
     driver: bridge
 EOF
-        
+
         # Create installation script for production deployment
-        cat > release-artifacts/install-production.sh << 'EOF'
+        cat > release-artifacts/install-production.sh <<'EOF'
 #!/bin/bash
 set -e
 
