@@ -145,24 +145,24 @@ jobs:
 
     - name: Test Docker Compose build
       run: |
-        docker-compose build
+        docker compose build
 
     - name: Test Docker Compose configuration
       run: |
-        docker-compose config
+        docker compose config
 
     - name: Test services start
       run: |
         # Start services in background
-        docker-compose up -d
+        docker compose up -d
         
         # Wait for services to be ready
         sleep 30
         
         # Check if containers are running
-        if ! docker-compose ps | grep "Up"; then
+        if ! docker compose ps | grep "Up"; then
           echo "Some services failed to start"
-          docker-compose logs
+          docker compose logs
           exit 1
         fi
         
@@ -171,7 +171,7 @@ jobs:
     - name: Cleanup
       if: always()
       run: |
-        docker-compose down -v
+        docker compose down -v
         docker system prune -f
 
   update-readme:
