@@ -9,14 +9,12 @@ RUN apt-get update && apt-get install -y \
     libxrender-dev \
     libgomp1 \
     libgtk-3-0 \
-    libgl1-mesa-glx \
-    libglib2.0-0 \
+    libgl1 \
     libgstreamer1.0-0 \
     python3-tk \
     python3-dev \
     libx11-dev \
     libxss1 \
-    libgconf-2-4 \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
