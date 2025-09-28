@@ -48,8 +48,8 @@ jobs:
 
     - name: Build and start services
       run: |
-        docker-compose build
-        docker-compose up -d
+        docker compose build
+        docker compose up -d
 
     - name: Wait for services
       run: |
@@ -107,19 +107,19 @@ jobs:
     - name: Test container health
       run: |
         # Check container status
-        if docker-compose ps | grep -q "pf-backend.*Up"; then
+        if docker compose ps | grep -q "pf-backend.*Up"; then
           echo "✅ Backend container is running"
         else
           echo "❌ Backend container not running"
-          docker-compose logs pf-backend
+          docker compose logs pf-backend
           exit 1
         fi
         
-        if docker-compose ps | grep -q "pf-frontend.*Up"; then
+        if docker compose ps | grep -q "pf-frontend.*Up"; then
           echo "✅ Frontend container is running"
         else
           echo "❌ Frontend container not running"
-          docker-compose logs pf-frontend
+          docker compose logs pf-frontend
           exit 1
         fi
 
@@ -127,14 +127,14 @@ jobs:
       if: failure()
       run: |
         echo "=== Backend Logs ==="
-        docker-compose logs pf-backend
+        docker compose logs pf-backend
         echo "=== Frontend Logs ==="
-        docker-compose logs pf-frontend
+        docker compose logs pf-frontend
 
     - name: Cleanup
       if: always()
       run: |
-        docker-compose down -v
+        docker compose down -v
 
   performance-tests:
     name: Performance Tests
@@ -157,8 +157,8 @@ jobs:
 
     - name: Build and start services
       run: |
-        docker-compose build
-        docker-compose up -d
+        docker compose build
+        docker compose up -d
 
     - name: Wait for services
       run: |
@@ -202,7 +202,7 @@ jobs:
     - name: Cleanup
       if: always()
       run: |
-        docker-compose down -v
+        docker compose down -v
 
   security-tests:
     name: Security Tests
@@ -215,7 +215,7 @@ jobs:
 
     - name: Build images
       run: |
-        docker-compose build
+        docker compose build
 
     - name: Run Trivy vulnerability scanner on backend
       uses: aquasecurity/trivy-action@master
@@ -258,7 +258,7 @@ jobs:
         # Start services
         cp .env.example .env
         sed -i 's/your-gemini-api-key-here/test-key/' .env
-        docker-compose up -d
+        docker compose up -d
         
         # Wait for services
         timeout 60 bash -c 'until curl -f http://localhost:8080; do sleep 2; done'
@@ -301,7 +301,7 @@ jobs:
     - name: Cleanup
       if: always()
       run: |
-        docker-compose down -v
+        docker compose down -v
 
   test-summary:
     name: Test Summary
