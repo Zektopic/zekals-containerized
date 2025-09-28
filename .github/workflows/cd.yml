@@ -145,8 +145,16 @@ jobs:
         format: 'sarif'
         output: 'frontend-trivy-results.sarif'
 
-    - name: Upload Trivy scan results to GitHub Security
+    - name: Upload Trivy scan results to GitHub Security - Backend
       uses: github/codeql-action/upload-sarif@v3
       if: always()
       with:
-        sarif_file: '.'
+        sarif_file: 'backend-trivy-results.sarif'
+        category: 'backend-trivy'
+
+    - name: Upload Trivy scan results to GitHub Security - Frontend
+      uses: github/codeql-action/upload-sarif@v3
+      if: always()
+      with:
+        sarif_file: 'frontend-trivy-results.sarif'
+        category: 'frontend-trivy'
