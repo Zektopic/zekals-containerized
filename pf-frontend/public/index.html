@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ALS Communication System</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="app">
+        <!-- Header -->
+        <header class="header">
+            <h1 id="app-title">ALS Communication System</h1>
+            <div class="header-controls">
+                <div class="connection-status" id="connection-status">
+                    <span class="status-indicator" id="status-indicator"></span>
+                    <span class="status-text" id="status-text">Connecting...</span>
+                </div>
+                <button id="language-toggle" class="language-toggle">EN</button>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Text Display Area -->
+            <section class="text-area-section">
+                <textarea 
+                    id="text-area" 
+                    class="text-area" 
+                    placeholder="Start typing with your eyes..."
+                    readonly
+                ></textarea>
+                <div class="text-actions">
+                    <button id="speak-button" class="action-button speak-button" title="Speak text">🔊</button>
+                    <button id="clear-all-button" class="action-button clear-button" title="Clear all text">🗑️</button>
+                </div>
+            </section>
+
+            <!-- Suggestions Bar -->
+            <section class="suggestions-section">
+                <h3 id="suggestions-title" class="suggestions-title">Suggestions</h3>
+                <div id="suggestions-container" class="suggestions-container">
+                    <!-- Suggestions will be dynamically inserted here -->
+                </div>
+            </section>
+
+            <!-- Virtual Keyboard -->
+            <section class="keyboard-section">
+                <div id="virtual-keyboard" class="virtual-keyboard">
+                    <!-- Keyboard will be dynamically generated -->
+                </div>
+            </section>
+        </main>
+
+        <!-- Cursor Indicator -->
+        <div id="cursor-indicator" class="cursor-indicator"></div>
+
+        <!-- Dwell Progress Ring -->
+        <div id="dwell-progress" class="dwell-progress hidden">
+            <svg class="dwell-ring" viewBox="0 0 60 60">
+                <circle class="dwell-ring-background" cx="30" cy="30" r="25"></circle>
+                <circle class="dwell-ring-progress" cx="30" cy="30" r="25"></circle>
+            </svg>
+        </div>
+
+        <!-- Loading Overlay -->
+        <div id="loading-overlay" class="loading-overlay">
+            <div class="spinner"></div>
+            <p id="loading-text">Connecting to eye tracker...</p>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

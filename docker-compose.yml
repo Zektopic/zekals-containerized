@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  vision:
+    build:
+      context: ./pf-backend
+      dockerfile: Dockerfile
+    container_name: als-vision-backend
+    environment:
+      - HARDWARE_MODE=${HARDWARE_MODE:-CPU}
+      - PYTHONUNBUFFERED=1
+      - DISPLAY=${DISPLAY:-:0}
+    devices:
+      - /dev/video0:/dev/video0  # Webcam access
+    volumes:
+      - /tmp/.X11-unix:/tmp/.X11-unix:rw  # X11 socket for GUI
+      - /dev/shm:/dev/shm  # Shared memory for better performance
+    networks:
+      - als-network
+    ports:
+      - "8765:8765"  # WebSocket port
+    restart: unless-stopped
+    privileged: true  # Required for mouse control
+    stdin_open: true
+    tty: true
+
+  ui:
+    build:
+      context: ./pf-frontend
+      dockerfile: Dockerfile
+    container_name: als-ui-frontend
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - LOCATION=${LOCATION:-Unknown Location}
+    ports:
+      - "8080:3000"  # Web server port
+      - "8081:8080"  # WebSocket port for UI clients
+    networks:
+      - als-network
+    depends_on:
+      - vision
+    restart: unless-stopped
+
+networks:
+  als-network:
+    driver: bridge
+
+volumes:
+  als-data:
+    driver: local

@@ -1,0 +1,71 @@
+{
+  "code": "el",
+  "name": "Ελληνικά",
+  "direction": "ltr",
+  "keyboard": [
+    [
+      "Θ", "Ω", "Ε", "Ρ", "Τ", "Υ", "Υ", "Ι", "Ο", "Π"
+    ],
+    [
+      "Α", "Σ", "Δ", "Φ", "Γ", "Η", "Ξ", "Κ", "Λ"
+    ],
+    [
+      "Ζ", "Χ", "Ψ", "Ω", "Β", "Ν", "Μ"
+    ],
+    [
+      {
+        "display": "123",
+        "value": "123",
+        "action": "numbers",
+        "width": "wide"
+      },
+      {
+        "display": "Κενό",
+        "value": " ",
+        "action": "space",
+        "width": "extra-wide"
+      },
+      {
+        "display": "⌫",
+        "value": "",
+        "action": "backspace",
+        "width": "wide",
+        "special": true
+      }
+    ],
+    [
+      ".", ",", ";", ":", "!", "?", "'", "\""
+    ],
+    [
+      {
+        "display": "Καθαρισμός",
+        "value": "",
+        "action": "clear",
+        "width": "wide",
+        "special": true
+      },
+      {
+        "display": "Enter",
+        "value": "\n",
+        "action": "enter",
+        "width": "wide",
+        "special": true
+      },
+      {
+        "display": "Lang",
+        "value": "",
+        "action": "language",
+        "width": "wide",
+        "special": true
+      }
+    ]
+  ],
+  "ui": {
+    "title": "Σύστημα Επικοινωνίας ALS",
+    "textPlaceholder": "Αρχίστε να πληκτρολογείτε με τα μάτια σας...",
+    "suggestionsTitle": "Προτάσεις",
+    "languageButton": "Γλώσσα",
+    "clearButton": "Καθαρισμός",
+    "connecting": "Σύνδεση με το eye tracker..."
+  }
+}
