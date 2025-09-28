@@ -86,7 +86,7 @@ jobs:
     - name: Install dependencies
       run: |
         cd pf-frontend
-        npm ci
+        npm install
 
     - name: Run linting
       run: |
