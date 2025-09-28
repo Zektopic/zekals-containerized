@@ -2,21 +2,25 @@
 set -e
 
 # Create the eslint config file
-cat > pf-frontend/.eslintrc.js << 'EOF'
-module.exports = {
-    "env": {
-        "browser": true,
-        "commonjs": true,
-        "es2021": true,
-        "node": true
+cat > pf-frontend/eslint.config.js << 'EOF'
+const globals = require("globals");
+const js = require("@eslint/js");
+
+module.exports = [
+  js.configs.recommended,
+  {
+    languageOptions: {
+        ecmaVersion: 2021,
+        globals: {
+            ...globals.browser,
+            ...globals.node,
+            ...globals.commonjs
+        }
     },
-    "extends": "eslint:recommended",
-    "parserOptions": {
-        "ecmaVersion": 12
-    },
-    "rules": {
+    rules: {
         "no-unused-vars": "warn",
         "no-console": "off"
     }
-};
+  }
+];
 EOF

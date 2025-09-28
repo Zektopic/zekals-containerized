@@ -70,7 +70,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node-version: [16.x, 18.x, 20.x]
+        node-version: [18.x, 20.x]
 
     steps:
     - name: Checkout code
@@ -93,7 +93,7 @@ jobs:
         chmod +x .github/scripts/create_eslint_config.sh
         ./.github/scripts/create_eslint_config.sh
         cd pf-frontend
-        npm install eslint --save-dev
+        npm install eslint globals @eslint/js --save-dev
         npx eslint server.js public/script.js --fix-dry-run
 
     - name: Run tests
