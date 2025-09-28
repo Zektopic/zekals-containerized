@@ -103,6 +103,7 @@ jobs:
         cd pf-frontend
         # Install testing dependencies
         npm install --save-dev mocha chai supertest
+        npm install --save axios
         
         # Add test script to package.json
         node -e "
