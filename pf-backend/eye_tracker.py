@@ -179,7 +179,7 @@ class EyeTracker:
         try:
             await websocket.wait_closed()
         finally:
-            self.websocket_clients.remove(websocket)
+            self.websocket_clients.discard(websocket)  # Use discard instead of remove (no KeyError)
             logger.info(f"WebSocket client disconnected from {websocket.remote_address}")
     
     async def broadcast_coordinates(self, x, y):
