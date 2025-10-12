@@ -2,6 +2,7 @@ version: '3.8'
 
 services:
   vision:
+    image: project-fone-containers_pf-backend:latest
     build:
       context: ./pf-backend
       dockerfile: Dockerfile
@@ -25,6 +26,7 @@ services:
     tty: true
 
   ui:
+    image: project-fone-containers_pf-frontend:latest
     build:
       context: ./pf-frontend
       dockerfile: Dockerfile
