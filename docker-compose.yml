@@ -1,8 +1,6 @@
-version: '3.8'
-
 services:
   vision:
-    image: project-fone-containers_pf-backend:latest
+    image: ghcr.io/zektopic/pfone-containerized/pf-backend:main-1c5929f
     build:
       context: ./pf-backend
       dockerfile: Dockerfile
@@ -26,7 +24,7 @@ services:
     tty: true
 
   ui:
-    image: project-fone-containers_pf-frontend:latest
+    image: ghcr.io/zektopic/pfone-containerized/pf-frontend:main-1c5929f
     build:
       context: ./pf-frontend
       dockerfile: Dockerfile
