@@ -1,6 +1,9 @@
 services:
   vision:
     image: ghcr.io/zektopic/pfone-containerized/pf-backend:main-1c5929f
+    build:
+      context: ./pf-backend
+      dockerfile: Dockerfile
     container_name: als-vision-backend
     environment:
       - HARDWARE_MODE=${HARDWARE_MODE:-CPU}
@@ -22,6 +25,9 @@ services:
 
   ui:
     image: ghcr.io/zektopic/pfone-containerized/pf-frontend:main-1c5929f
+    build:
+      context: ./pf-frontend
+      dockerfile: Dockerfile
     container_name: als-ui-frontend
     environment:
       - NODE_ENV=production
