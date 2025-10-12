@@ -10,7 +10,6 @@ screen coordinates over WebSocket.
 
 import cv2
 import mediapipe as mp
-import pyautogui
 import numpy as np
 import asyncio
 import websockets
@@ -19,6 +18,18 @@ import os
 import time
 from collections import deque
 import logging
+
+# Try to import pyautogui, but make it optional
+try:
+    import pyautogui
+    PYAUTOGUI_AVAILABLE = True
+    logger_temp = logging.getLogger(__name__)
+    logger_temp.info("PyAutoGUI loaded successfully - mouse control enabled")
+except Exception as e:
+    PYAUTOGUI_AVAILABLE = False
+    logger_temp = logging.getLogger(__name__)
+    logger_temp.warning(f"PyAutoGUI not available: {e}. Mouse control will be disabled, but WebSocket streaming will work.")
+    pyautogui = None
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -55,16 +66,28 @@ class EyeTracker:
         
         # Initialize webcam
         self.cap = cv2.VideoCapture(0)
-        if not self.cap.isOpened():
-            raise RuntimeError("Could not open webcam")
+        self.webcam_available = self.cap.isOpened()
         
-        # Set webcam resolution for better performance
-        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+        if not self.webcam_available:
+            logger.warning("Could not open webcam - running in simulation mode")
+            logger.warning("WebSocket server will still run for testing purposes")
+            if self.cap is not None:
+                self.cap.release()
+            self.cap = None
+        else:
+            logger.info("Webcam initialized successfully")
+            # Set webcam resolution for better performance
+            self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+            self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
         
         # Get screen dimensions
-        self.screen_width, self.screen_height = pyautogui.size()
-        logger.info(f"Screen resolution: {self.screen_width}x{self.screen_height}")
+        if PYAUTOGUI_AVAILABLE:
+            self.screen_width, self.screen_height = pyautogui.size()
+            logger.info(f"Screen resolution: {self.screen_width}x{self.screen_height}")
+        else:
+            # Default to common resolution if pyautogui is not available
+            self.screen_width, self.screen_height = 1920, 1080
+            logger.info(f"Using default screen resolution: {self.screen_width}x{self.screen_height}")
         
         # Smoothing buffer for gaze coordinates
         self.gaze_buffer = deque(maxlen=5)  # Moving average of last 5 positions
@@ -175,9 +198,37 @@ class EyeTracker:
             # Clean up disconnected clients
             self.websocket_clients -= disconnected_clients
     
+    async def run_simulation_mode(self):
+        """Run in simulation mode when no webcam is available."""
+        logger.info("Simulation mode: Broadcasting center screen coordinates")
+        
+        # Broadcast center screen coordinates periodically
+        center_x = self.screen_width // 2
+        center_y = self.screen_height // 2
+        
+        while True:
+            # Simulate slight movement around center
+            offset_x = int(50 * np.sin(time.time()))
+            offset_y = int(50 * np.cos(time.time()))
+            
+            x = center_x + offset_x
+            y = center_y + offset_y
+            
+            # Broadcast coordinates via WebSocket
+            await self.broadcast_coordinates(x, y)
+            
+            # Small delay to prevent overwhelming the system
+            await asyncio.sleep(0.033)  # ~30 FPS
+    
     async def run_eye_tracking(self):
         """Main eye tracking loop."""
         logger.info("Starting eye tracking loop...")
+        
+        # If no webcam, run in simulation mode
+        if not self.webcam_available:
+            logger.info("Running in simulation mode - generating simulated coordinates")
+            await self.run_simulation_mode()
+            return
         
         while True:
             ret, frame = self.cap.read()
@@ -207,17 +258,17 @@ class EyeTracker:
                         if smoothed_point:
                             x, y = smoothed_point
                             
-                            # Move system mouse cursor
-                            try:
-                                pyautogui.moveTo(x, y, duration=0)
-                                
-                                # Broadcast coordinates via WebSocket
-                                await self.broadcast_coordinates(x, y)
-                                
-                            except pyautogui.FailSafeException:
-                                logger.warning("PyAutoGUI fail-safe triggered")
-                            except Exception as e:
-                                logger.error(f"Error moving mouse: {e}")
+                            # Move system mouse cursor (only if pyautogui is available)
+                            if PYAUTOGUI_AVAILABLE:
+                                try:
+                                    pyautogui.moveTo(x, y, duration=0)
+                                except pyautogui.FailSafeException:
+                                    logger.warning("PyAutoGUI fail-safe triggered")
+                                except Exception as e:
+                                    logger.error(f"Error moving mouse: {e}")
+                            
+                            # Broadcast coordinates via WebSocket
+                            await self.broadcast_coordinates(x, y)
             
             # Small delay to prevent overwhelming the system
             await asyncio.sleep(0.033)  # ~30 FPS
@@ -232,8 +283,9 @@ class EyeTracker:
     async def run(self):
         """Run the complete eye tracking system."""
         try:
-            # Disable pyautogui fail-safe for smoother operation
-            pyautogui.FAILSAFE = False
+            # Disable pyautogui fail-safe for smoother operation (if available)
+            if PYAUTOGUI_AVAILABLE:
+                pyautogui.FAILSAFE = False
             
             # Start WebSocket server
             websocket_server = await self.start_websocket_server()
@@ -247,7 +299,7 @@ class EyeTracker:
             logger.error(f"Unexpected error: {e}")
         finally:
             # Cleanup
-            if hasattr(self, 'cap'):
+            if hasattr(self, 'cap') and self.cap is not None:
                 self.cap.release()
             cv2.destroyAllWindows()
 
