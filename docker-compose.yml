@@ -1,11 +1,6 @@
-version: '3.8'
-
 services:
   vision:
-    image: project-fone-containers_pf-backend:latest
-    build:
-      context: ./pf-backend
-      dockerfile: Dockerfile
+    image: ghcr.io/zektopic/pfone-containerized/pf-backend:main-1c5929f
     container_name: als-vision-backend
     environment:
       - HARDWARE_MODE=${HARDWARE_MODE:-CPU}
@@ -26,10 +21,7 @@ services:
     tty: true
 
   ui:
-    image: project-fone-containers_pf-frontend:latest
-    build:
-      context: ./pf-frontend
-      dockerfile: Dockerfile
+    image: ghcr.io/zektopic/pfone-containerized/pf-frontend:main-1c5929f
     container_name: als-ui-frontend
     environment:
       - NODE_ENV=production
