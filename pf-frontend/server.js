@@ -22,8 +22,14 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Serve language files
 app.use('/languages', express.static(path.join(__dirname, 'languages')));
 
-// WebSocket server for communication with clients
-const wss = new WebSocket.Server({ port: 8080 });
+// Start the Express server first
+const server = app.listen(PORT, () => {
+    console.log(`ALS Communication UI server running on port ${PORT}`);
+    console.log(`Access the application at: http://localhost:${PORT}`);
+});
+
+// WebSocket server for communication with clients (use the same HTTP server)
+const wss = new WebSocket.Server({ server });
 
 // Store connected clients
 const clients = new Set();
@@ -196,14 +202,8 @@ function getTimeOfDay(date) {
     return "night";
 }
 
-// Start the Express server
-app.listen(PORT, () => {
-    console.log(`ALS Communication UI server running on port ${PORT}`);
-    console.log(`Access the application at: http://localhost:${PORT}`);
-    
-    // Connect to Python backend
-    setTimeout(connectToBackend, 2000); // Give some time for services to start
-});
+// Connect to Python backend after server starts
+setTimeout(connectToBackend, 2000); // Give some time for services to start
 
 // Graceful shutdown
 process.on('SIGTERM', () => {

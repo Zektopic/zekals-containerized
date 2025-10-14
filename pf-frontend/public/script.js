@@ -33,6 +33,9 @@ class ALSCommunicationApp {
 
     async init() {
         try {
+            // Show loading initially
+            this.showLoading('Initializing...');
+            
             // Load languages
             await this.loadLanguages();
             
@@ -46,8 +49,17 @@ class ALSCommunicationApp {
             this.connectWebSocket();
             
             console.log('ALS Communication App initialized');
+            
+            // Hide loading after a short delay to ensure everything is ready
+            setTimeout(() => {
+                if (!this.websocket || this.websocket.readyState !== WebSocket.OPEN) {
+                    // If WebSocket isn't connected yet, hide anyway since app is functional
+                    this.hideLoading();
+                }
+            }, 2000);
         } catch (error) {
             console.error('Failed to initialize app:', error);
+            this.hideLoading();
             this.showError('Failed to initialize application');
         }
     }
@@ -193,10 +205,23 @@ class ALSCommunicationApp {
 
     connectWebSocket() {
         try {
-            // Connect to the Node.js server's WebSocket
-            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const wsUrl = `${protocol}//${window.location.hostname}:8080`;
+            // Prevent multiple connection attempts
+            if (this.websocket && this.websocket.readyState === WebSocket.CONNECTING) {
+                console.log('WebSocket connection already in progress');
+                return;
+            }
             
+            // Close existing connection if any
+            if (this.websocket && this.websocket.readyState === WebSocket.OPEN) {
+                console.log('Closing existing WebSocket connection');
+                this.websocket.close();
+            }
+            
+            // Connect to the Node.js server's WebSocket (same port as HTTP server)
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}`; // Use .host to include port
+            
+            console.log('Connecting to WebSocket:', wsUrl);
             this.websocket = new WebSocket(wsUrl);
 
             this.websocket.onopen = () => {
@@ -214,11 +239,20 @@ class ALSCommunicationApp {
                 }
             };
 
-            this.websocket.onclose = () => {
-                console.log('WebSocket connection closed, attempting to reconnect...');
+            this.websocket.onclose = (event) => {
+                console.log('WebSocket connection closed. Code:', event.code, 'Reason:', event.reason);
                 this.updateConnectionStatus(false);
-                this.showLoading('Reconnecting...');
-                setTimeout(() => this.connectWebSocket(), 3000);
+                
+                // Only show reconnecting overlay if connection was previously established
+                if (event.code !== 1000) { // 1000 = normal closure
+                    this.showLoading('Reconnecting...');
+                }
+                
+                // Attempt to reconnect after delay
+                setTimeout(() => {
+                    console.log('Attempting to reconnect...');
+                    this.connectWebSocket();
+                }, 3000);
             };
 
             this.websocket.onerror = (error) => {
@@ -228,7 +262,7 @@ class ALSCommunicationApp {
 
         } catch (error) {
             console.error('Failed to connect WebSocket:', error);
-            this.showError('Failed to connect to server');
+            this.hideLoading(); // Hide loading on error
         }
     }
 
