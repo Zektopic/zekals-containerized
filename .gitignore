@@ -65,6 +65,7 @@ wheels/
 .installed.cfg
 *.egg
 MANIFEST
+venv/
 
 # Docker
 .dockerignore
