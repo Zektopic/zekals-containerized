@@ -1,10 +1,10 @@
 services:
-  pf-backend:
-    image: project-fone-containers_pf-backend:latest
+  vision:
+    image: ghcr.io/zektopic/pfone-containerized/pf-backend:main-1c5929f
     build:
       context: ./pf-backend
       dockerfile: Dockerfile
-    container_name: pf-backend
+    container_name: als-vision-backend
     environment:
       - HARDWARE_MODE=${HARDWARE_MODE:-CPU}
       - PYTHONUNBUFFERED=1
@@ -23,12 +23,12 @@ services:
     stdin_open: true
     tty: true
 
-  pf-frontend:
-    image: project-fone-containers_pf-frontend:latest
+  ui:
+    image: ghcr.io/zektopic/pfone-containerized/pf-frontend:main-1c5929f
     build:
       context: ./pf-frontend
       dockerfile: Dockerfile
-    container_name: pf-frontend
+    container_name: als-ui-frontend
     environment:
       - NODE_ENV=production
       - PORT=3000
@@ -40,7 +40,7 @@ services:
     networks:
       - als-network
     depends_on:
-      - pf-backend
+      - vision
     restart: unless-stopped
 
 networks:
