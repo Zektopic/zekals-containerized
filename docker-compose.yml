@@ -8,9 +8,9 @@ services:
     environment:
       - HARDWARE_MODE=${HARDWARE_MODE:-CPU}
       - PYTHONUNBUFFERED=1
-    devices:
-      # Webcam access (Linux-specific). On Windows/macOS, Docker Desktop handles webcam access.
-      # - /dev/video0:/dev/video0
+    # devices:
+    #   # Webcam access (Linux-specific). On Windows/macOS, Docker Desktop handles webcam access.
+    #   - /dev/video0:/dev/video0
     volumes:
       # - /tmp/.X11-unix:/tmp/.X11-unix:rw  # X11 socket for GUI (Linux-specific)
       - /dev/shm:/dev/shm  # Shared memory for better performance
