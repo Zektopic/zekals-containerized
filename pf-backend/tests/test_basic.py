@@ -23,12 +23,7 @@ class TestImports:
         try:
             import cv2
             import mediapipe
-            # The following import is known to fail in CI environments
-            # where there is no display.
-            try:
-                import pyautogui
-            except Exception:
-                pass
+            import pyautogui
             import websockets
             import numpy
             assert True
