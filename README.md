@@ -14,6 +14,32 @@ A modern, open-source assistive communication system for individuals with ALS, i
 
 ## 🚀 Quick Start
 
+### Windows Setup
+
+1.  **Clone the repository**:
+    ```powershell
+    git clone <repository-url>
+    cd project-fone-containers
+    ```
+
+2.  **Run the setup script**:
+    Open PowerShell as Administrator and run:
+    ```powershell
+    .\setup-windows.ps1
+    ```
+    This will help you install required tools like Chocolatey, Python, Node.js, and Docker Desktop.
+
+3.  **Configure your API keys**:
+    ```powershell
+    notepad .env
+    # Add your GEMINI_API_KEY and other settings
+    ```
+
+4.  **Start the system in development mode**:
+    ```batch
+    .\run-dev.bat
+    ```
+
 ### Ubuntu/Linux Setup (Recommended)
 
 1. **Clone the repository**:
@@ -65,13 +91,16 @@ If you prefer manual setup:
 
 ## 📋 Available Scripts
 
-| Script | Purpose |
-|--------|---------|
-| `./setup-ubuntu.sh` | Complete system setup and dependency installation |
-| `./run-ubuntu.sh` | Start the complete system using Docker |
-| `./run-kiosk.sh` | Launch browser in full-screen kiosk mode |
-| `./run-dev.sh` | Run in development mode (without Docker) |
-| `./system-check.sh` | Check system requirements and diagnose issues |
+| Script | OS | Purpose |
+|---|---|---|
+| `setup-windows.ps1` | Windows | Guides through dependency installation. |
+| `run-dev.bat` | Windows | Runs the application in development mode. |
+| `system-check.ps1`| Windows | Checks system requirements. |
+| `./setup-ubuntu.sh` | Linux | Complete system setup and dependency installation |
+| `./run-ubuntu.sh` | Linux | Start the complete system using Docker |
+| `./run-kiosk.sh` | Linux | Launch browser in full-screen kiosk mode |
+| `./run-dev.sh` | Linux | Run in development mode (without Docker) |
+| `./system-check.sh` | Linux | Check system requirements and diagnose issues |
 
 ## 🔧 System Requirements
 
