@@ -107,7 +107,7 @@ jobs:
     - name: Test container health
       run: |
         # Check container status
-        if docker compose ps | grep -q "pf-backend.*Up"; then
+        if docker compose --project-name pfone-test ps | grep -q "pf-backend.*Up"; then
           echo "✅ Backend container is running"
         else
           echo "❌ Backend container not running"
@@ -115,7 +115,7 @@ jobs:
           exit 1
         fi
         
-        if docker compose ps | grep -q "pf-frontend.*Up"; then
+        if docker compose --project-name pfone-test ps | grep -q "pf-frontend.*Up"; then
           echo "✅ Frontend container is running"
         else
           echo "❌ Frontend container not running"
