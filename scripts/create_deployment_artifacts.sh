@@ -32,9 +32,9 @@ cp system-check.sh release-artifacts/
 cat > release-artifacts/docker-compose.prod.yml <<EOF
 version: '3.8'
 services:
-  pf-backend:
+  za-backend:
     image: ${REGISTRY}/${IMAGE_NAME_BACKEND}:${VERSION}
-    container_name: pfone-backend
+    container_name: zekals-backend
     environment:
       - HARDWARE_MODE=\${HARDWARE_MODE:-CPU}
       - DISPLAY=\${DISPLAY}
@@ -46,9 +46,9 @@ services:
     network_mode: host
     restart: unless-stopped
     privileged: true
-  pf-frontend:
+  za-frontend:
     image: ${REGISTRY}/${IMAGE_NAME_FRONTEND}:${VERSION}
-    container_name: pfone-frontend
+    container_name: zekals-frontend
     ports:
       - "8080:3000"
     environment:
@@ -56,7 +56,7 @@ services:
       - LOCATION=\${LOCATION:-Unknown}
       - WEBSOCKET_URL=ws://localhost:8765
     depends_on:
-      - pf-backend
+      - za-backend
     restart: unless-stopped
 networks:
   default:
@@ -67,7 +67,7 @@ EOF
 cat > release-artifacts/install-production.sh <<'EOF'
 #!/bin/bash
 set -e
-echo "🚀 Installing Project F.O.N.E (Production)"
+echo "🚀 Installing zekALS (Production)"
 echo "=========================================="
 # Check Docker
 if ! command -v docker &> /dev/null; then
@@ -105,6 +105,6 @@ chmod +x release-artifacts/install-production.sh
 
 # Create the final deployment archive
 echo "📦 Creating deployment archive..."
-tar -czf project-fone-${VERSION}-deployment.tar.gz -C release-artifacts .
+tar -czf zekALS-${VERSION}-deployment.tar.gz -C release-artifacts .
 
 echo "✅ Deployment artifacts created successfully."

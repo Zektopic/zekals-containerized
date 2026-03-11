@@ -107,19 +107,19 @@ jobs:
     - name: Test container health
       run: |
         # Check container status
-        if docker compose ps | grep -q "pf-backend.*Up"; then
+        if docker compose ps | grep -q "za-backend.*Up"; then
           echo "✅ Backend container is running"
         else
           echo "❌ Backend container not running"
-          docker compose logs pf-backend
+          docker compose logs za-backend
           exit 1
         fi
         
-        if docker compose ps | grep -q "pf-frontend.*Up"; then
+        if docker compose ps | grep -q "za-frontend.*Up"; then
           echo "✅ Frontend container is running"
         else
           echo "❌ Frontend container not running"
-          docker compose logs pf-frontend
+          docker compose logs za-frontend
           exit 1
         fi
 
@@ -127,9 +127,9 @@ jobs:
       if: failure()
       run: |
         echo "=== Backend Logs ==="
-        docker compose logs pf-backend
+        docker compose logs za-backend
         echo "=== Frontend Logs ==="
-        docker compose logs pf-frontend
+        docker compose logs za-frontend
 
     - name: Cleanup
       if: always()
@@ -220,7 +220,7 @@ jobs:
     - name: Run Trivy vulnerability scanner on backend
       uses: aquasecurity/trivy-action@master
       with:
-        image-ref: 'project-fone-containers_pf-backend:latest'
+        image-ref: 'zekals-containers_za-backend:latest'
         format: 'json'
         output: 'backend-vulnerabilities.json'
         exit-code: '0'  # Don't fail the build on vulnerabilities
@@ -228,7 +228,7 @@ jobs:
     - name: Run Trivy vulnerability scanner on frontend
       uses: aquasecurity/trivy-action@master
       with:
-        image-ref: 'project-fone-containers_pf-frontend:latest'
+        image-ref: 'zekals-containers_za-frontend:latest'
         format: 'json'
         output: 'frontend-vulnerabilities.json'
         exit-code: '0'

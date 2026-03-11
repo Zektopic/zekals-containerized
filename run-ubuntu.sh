@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# Project F.O.N.E - Ubuntu Runtime Script
+# zekALS - Ubuntu Runtime Script
 # This script runs the complete assistive communication system on Ubuntu
 
 set -e  # Exit on any error
 
-echo "🎯 Project F.O.N.E - Starting System"
+echo "🎯 zekALS - Starting System"
 echo "===================================="
 echo ""
 
@@ -80,7 +80,7 @@ fi
 print_status "Building Docker containers (this may take a few minutes on first run)..."
 docker-compose build
 
-print_status "Starting the Project F.O.N.E system..."
+print_status "Starting the zekALS system..."
 docker-compose up -d
 
 # Wait for services to start
@@ -89,19 +89,19 @@ sleep 5
 
 # Check if services are running
 print_status "Checking service status..."
-if docker-compose ps | grep -q "pf-backend.*Up"; then
+if docker-compose ps | grep -q "za-backend.*Up"; then
     print_success "Backend service is running"
 else
     print_error "Backend service failed to start"
-    docker-compose logs pf-backend
+    docker-compose logs za-backend
     exit 1
 fi
 
-if docker-compose ps | grep -q "pf-frontend.*Up"; then
+if docker-compose ps | grep -q "za-frontend.*Up"; then
     print_success "Frontend service is running"
 else
     print_error "Frontend service failed to start"
-    docker-compose logs pf-frontend
+    docker-compose logs za-frontend
     exit 1
 fi
 

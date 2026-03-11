@@ -6,10 +6,10 @@ call venv\Scripts\activate.bat
 
 REM Install dependencies
 echo [INFO] Installing Python dependencies...
-pip install -r pf-backend/requirements.txt
+pip install -r za-backend/requirements.txt
 
 echo [INFO] Installing Node.js dependencies...
-cd pf-frontend
+cd za-frontend
 npm install
 cd ..
 

@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# Project F.O.N.E - System Check and Troubleshooting Script
+# zekALS - System Check and Troubleshooting Script
 # This script checks system requirements and helps diagnose issues
 
-echo "🔍 Project F.O.N.E - System Check"
+echo "🔍 zekALS - System Check"
 echo "================================="
 echo ""
 
@@ -128,28 +128,28 @@ if [ ! -f "docker-compose.yml" ]; then
     MISSING_FILES+=("docker-compose.yml")
 fi
 
-if [ ! -f "pf-backend/Dockerfile" ]; then
-    MISSING_FILES+=("pf-backend/Dockerfile")
+if [ ! -f "za-backend/Dockerfile" ]; then
+    MISSING_FILES+=("za-backend/Dockerfile")
 fi
 
-if [ ! -f "pf-backend/eye_tracker.py" ]; then
-    MISSING_FILES+=("pf-backend/eye_tracker.py")
+if [ ! -f "za-backend/eye_tracker.py" ]; then
+    MISSING_FILES+=("za-backend/eye_tracker.py")
 fi
 
-if [ ! -f "pf-backend/requirements.txt" ]; then
-    MISSING_FILES+=("pf-backend/requirements.txt")
+if [ ! -f "za-backend/requirements.txt" ]; then
+    MISSING_FILES+=("za-backend/requirements.txt")
 fi
 
-if [ ! -f "pf-frontend/Dockerfile" ]; then
-    MISSING_FILES+=("pf-frontend/Dockerfile")
+if [ ! -f "za-frontend/Dockerfile" ]; then
+    MISSING_FILES+=("za-frontend/Dockerfile")
 fi
 
-if [ ! -f "pf-frontend/server.js" ]; then
-    MISSING_FILES+=("pf-frontend/server.js")
+if [ ! -f "za-frontend/server.js" ]; then
+    MISSING_FILES+=("za-frontend/server.js")
 fi
 
-if [ ! -f "pf-frontend/package.json" ]; then
-    MISSING_FILES+=("pf-frontend/package.json")
+if [ ! -f "za-frontend/package.json" ]; then
+    MISSING_FILES+=("za-frontend/package.json")
 fi
 
 if [ ${#MISSING_FILES[@]} -eq 0 ]; then
@@ -191,14 +191,14 @@ echo "===================="
 
 # Check if services are running
 print_check "Backend service (Docker)"
-if docker-compose ps 2>/dev/null | grep -q "pf-backend.*Up"; then
+if docker-compose ps 2>/dev/null | grep -q "za-backend.*Up"; then
     print_success "Backend service is running"
 else
     print_warning "Backend service is not running"
 fi
 
 print_check "Frontend service (Docker)"
-if docker-compose ps 2>/dev/null | grep -q "pf-frontend.*Up"; then
+if docker-compose ps 2>/dev/null | grep -q "za-frontend.*Up"; then
     print_success "Frontend service is running"
 else
     print_warning "Frontend service is not running"

@@ -55,14 +55,14 @@ jobs:
     - name: Build and push backend image
       uses: docker/build-push-action@v5
       with:
-        context: ./pf-backend
-        file: ./pf-backend/Dockerfile
+        context: ./za-backend
+        file: ./za-backend/Dockerfile
         push: true
         tags: |
-          ${{ env.REGISTRY }}/${{ steps.repo_name.outputs.name }}/pf-backend:${{ steps.version.outputs.version }}
-          ${{ env.REGISTRY }}/${{ steps.repo_name.outputs.name }}/pf-backend:latest
+          ${{ env.REGISTRY }}/${{ steps.repo_name.outputs.name }}/za-backend:${{ steps.version.outputs.version }}
+          ${{ env.REGISTRY }}/${{ steps.repo_name.outputs.name }}/za-backend:latest
         labels: |
-          org.opencontainers.image.title=Project F.O.N.E Backend
+          org.opencontainers.image.title=zekALS Backend
           org.opencontainers.image.description=Eye-tracking backend service
           org.opencontainers.image.version=${{ steps.version.outputs.version }}
           org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
@@ -73,14 +73,14 @@ jobs:
     - name: Build and push frontend image
       uses: docker/build-push-action@v5
       with:
-        context: ./pf-frontend
-        file: ./pf-frontend/Dockerfile
+        context: ./za-frontend
+        file: ./za-frontend/Dockerfile
         push: true
         tags: |
-          ${{ env.REGISTRY }}/${{ steps.repo_name.outputs.name }}/pf-frontend:${{ steps.version.outputs.version }}
-          ${{ env.REGISTRY }}/${{ steps.repo_name.outputs.name }}/pf-frontend:latest
+          ${{ env.REGISTRY }}/${{ steps.repo_name.outputs.name }}/za-frontend:${{ steps.version.outputs.version }}
+          ${{ env.REGISTRY }}/${{ steps.repo_name.outputs.name }}/za-frontend:latest
         labels: |
-          org.opencontainers.image.title=Project F.O.N.E Frontend
+          org.opencontainers.image.title=zekALS Frontend
           org.opencontainers.image.description=Web interface with virtual keyboard
           org.opencontainers.image.version=${{ steps.version.outputs.version }}
           org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
@@ -93,15 +93,15 @@ jobs:
         ./scripts/create_deployment_artifacts.sh \
           ${{ steps.version.outputs.version }} \
           ${{ env.REGISTRY }} \
-          ${{ steps.repo_name.outputs.name }}/pf-backend \
-          ${{ steps.repo_name.outputs.name }}/pf-frontend
+          ${{ steps.repo_name.outputs.name }}/za-backend \
+          ${{ steps.repo_name.outputs.name }}/za-frontend
 
     - name: Upload release artifacts
       uses: actions/upload-artifact@v4
       with:
         name: deployment-package-${{ steps.version.outputs.version }}
         path: |
-          project-fone-${{ steps.version.outputs.version }}-deployment.tar.gz
+          zekALS-${{ steps.version.outputs.version }}-deployment.tar.gz
           release-artifacts/
 
     - name: Attach to release
@@ -111,8 +111,8 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ github.event.release.upload_url }}
-        asset_path: ./project-fone-${{ steps.version.outputs.version }}-deployment.tar.gz
-        asset_name: project-fone-${{ steps.version.outputs.version }}-deployment.tar.gz
+        asset_path: ./zekALS-${{ steps.version.outputs.version }}-deployment.tar.gz
+        asset_name: zekALS-${{ steps.version.outputs.version }}-deployment.tar.gz
         asset_content_type: application/gzip
 
   security-scan:
@@ -134,14 +134,14 @@ jobs:
     - name: Run Trivy vulnerability scanner - Backend
       uses: aquasecurity/trivy-action@master
       with:
-        image-ref: ${{ env.REGISTRY }}/${{ needs.build-and-publish.outputs.repo_name }}/pf-backend:latest
+        image-ref: ${{ env.REGISTRY }}/${{ needs.build-and-publish.outputs.repo_name }}/za-backend:latest
         format: 'sarif'
         output: 'backend-trivy-results.sarif'
 
     - name: Run Trivy vulnerability scanner - Frontend
       uses: aquasecurity/trivy-action@master
       with:
-        image-ref: ${{ env.REGISTRY }}/${{ needs.build-and-publish.outputs.repo_name }}/pf-frontend:latest
+        image-ref: ${{ env.REGISTRY }}/${{ needs.build-and-publish.outputs.repo_name }}/za-frontend:latest
         format: 'sarif'
         output: 'frontend-trivy-results.sarif'
 

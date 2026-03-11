@@ -1,4 +1,4 @@
-# Project F.O.N.E - Assistive Communication System
+# zekALS - Assistive Communication System
 
 A modern, open-source assistive communication system for individuals with ALS, inspired by Stephen Hawking's ACAT system. This system leverages eye-tracking technology to enable users to type messages and receive intelligent, context-aware sentence completions.
 
@@ -19,7 +19,7 @@ A modern, open-source assistive communication system for individuals with ALS, i
 1.  **Clone the repository**:
     ```powershell
     git clone <repository-url>
-    cd project-fone-containers
+    cd zekALS-containers
     ```
 
 2.  **Run the setup script**:
@@ -45,7 +45,7 @@ A modern, open-source assistive communication system for individuals with ALS, i
 1. **Clone the repository**:
    ```bash
    git clone <repository-url>
-   cd project-fone-containers
+   cd zekALS-containers
    ```
 
 2. **Run the setup script**:
@@ -164,7 +164,7 @@ The system supports multiple languages through JSON configuration files:
 - `languages/el.json` - Greek keyboard layout
 
 To add a new language:
-1. Create a new JSON file in the `pf-frontend/languages/` directory
+1. Create a new JSON file in the `za-frontend/languages/` directory
 2. Define the keyboard layout and UI strings
 3. Update the language selector in the frontend
 
@@ -241,7 +241,7 @@ This runs the services directly without Docker, making it easier to see logs and
 ### File Structure
 
 ```
-project-fone-containers/
+zekALS-containers/
 ├── docker-compose.yml          # Docker orchestration
 ├── .env.example               # Environment template
 ├── setup-ubuntu.sh           # Ubuntu setup script
@@ -249,12 +249,12 @@ project-fone-containers/
 ├── run-kiosk.sh              # Kiosk mode launcher
 ├── run-dev.sh                # Development mode
 ├── system-check.sh           # System diagnostics
-├── pf-backend/               # Python backend
+├── za-backend/               # Python backend
 │   ├── Dockerfile
 │   ├── eye_tracker.py        # Main eye tracking service
 │   ├── requirements.txt      # Python dependencies
 │   └── test_websocket.py     # WebSocket test client
-└── pf-frontend/              # Node.js frontend
+└── za-frontend/              # Node.js frontend
     ├── Dockerfile
     ├── server.js             # Express web server
     ├── package.json          # Node.js dependencies
@@ -297,4 +297,4 @@ If you encounter issues:
 
 ---
 
-**Project F.O.N.E** - Empowering communication through technology
+**zekALS** - Empowering communication through technology

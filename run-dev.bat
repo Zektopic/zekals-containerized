@@ -1,7 +1,7 @@
 @echo off
-REM Project F.O.N.E - Development Mode Script for Windows
+REM zekALS - Development Mode Script for Windows
 
-echo [INFO] Project F.O.N.E - Development Mode
+echo [INFO] zekALS - Development Mode
 echo =====================================
 echo.
 
@@ -16,17 +16,17 @@ call venv\Scripts\activate.bat
 
 REM Install dependencies
 echo [INFO] Installing Python dependencies...
-pip install -r pf-backend/requirements.txt
+pip install -r za-backend/requirements.txt
 
 echo [INFO] Installing Node.js dependencies...
-cd pf-frontend
+cd za-frontend
 npm install
 cd ..
 
 REM Start backend and frontend
 echo [INFO] Starting services...
-start "Backend" python pf-backend/eye_tracker.py
-cd pf-frontend
+start "Backend" python za-backend/eye_tracker.py
+cd za-frontend
 start "Frontend" node server.js
 cd ..
 

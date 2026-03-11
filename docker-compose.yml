@@ -1,8 +1,8 @@
 services:
   vision:
-    image: project-fone-containers_pf-backend:latest
+    image: zekals-containers_za-backend:latest
     build:
-      context: ./pf-backend
+      context: ./za-backend
       dockerfile: Dockerfile
     container_name: als-vision-backend
     environment:
@@ -24,9 +24,9 @@ services:
     tty: true
 
   ui:
-    image: project-fone-containers_pf-frontend:latest
+    image: zekals-containers_za-frontend:latest
     build:
-      context: ./pf-frontend
+      context: ./za-frontend
       dockerfile: Dockerfile
     container_name: als-ui-frontend
     environment:

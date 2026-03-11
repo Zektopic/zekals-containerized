@@ -2,10 +2,10 @@
 set -e
 
 # Create the tests directory if it doesn't exist
-mkdir -p pf-backend/tests
+mkdir -p za-backend/tests
 
 # Create the test file
-cat > pf-backend/tests/test_basic.py << 'EOF'
+cat > za-backend/tests/test_basic.py << 'EOF'
 import pytest
 import sys
 import os

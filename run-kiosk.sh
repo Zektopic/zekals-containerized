@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# Project F.O.N.E - Kiosk Mode Script
+# zekALS - Kiosk Mode Script
 # This script launches Chromium in full-screen kiosk mode for the assistive communication system
 
-echo "🖥️ Project F.O.N.E - Kiosk Mode"
+echo "🖥️ zekALS - Kiosk Mode"
 echo "==============================="
 echo ""
 

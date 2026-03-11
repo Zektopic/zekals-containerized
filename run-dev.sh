@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# Project F.O.N.E - Development Mode Script
+# zekALS - Development Mode Script
 # This script runs the system in development mode without Docker for easier debugging
 
 set -e
 
-echo "🔧 Project F.O.N.E - Development Mode"
+echo "🔧 zekALS - Development Mode"
 echo "====================================="
 echo ""
 
@@ -61,10 +61,10 @@ source venv/bin/activate
 # Install/update dependencies
 print_status "Installing Python dependencies..."
 pip install --upgrade pip
-pip install -r pf-backend/requirements.txt
+pip install -r za-backend/requirements.txt
 
 print_status "Installing Node.js dependencies..."
-cd pf-frontend
+cd za-frontend
 npm install
 cd ..
 
@@ -85,7 +85,7 @@ trap cleanup SIGINT SIGTERM
 
 # Start backend in background
 print_status "Starting Python backend..."
-cd pf-backend
+cd za-backend
 python eye_tracker.py &
 BACKEND_PID=$!
 cd ..
@@ -103,7 +103,7 @@ print_success "Backend started with PID: $BACKEND_PID"
 
 # Start frontend
 print_status "Starting Node.js frontend..."
-cd pf-frontend
+cd za-frontend
 node server.js &
 FRONTEND_PID=$!
 cd ..

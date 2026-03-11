@@ -1,4 +1,4 @@
-# Project F.O.N.E - System Check for Windows
+# zekALS - System Check for Windows
 
 # --- Helper Functions ---
 function Print-Check ($message) {

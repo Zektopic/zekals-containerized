@@ -1,5 +1,5 @@
-# Project F.O.N.E - Windows Setup Script
-# This script helps set up the required tools and environment for Project F.O.N.E on Windows.
+# zekALS - Windows Setup Script
+# This script helps set up the required tools and environment for zekALS on Windows.
 
 # --- Helper Functions ---
 function Print-Status ($message) {
@@ -24,7 +24,7 @@ function Open-Link ($url) {
 }
 
 # --- Main Setup Logic ---
-Print-Status "Starting Windows setup for Project F.O.N.E..."
+Print-Status "Starting Windows setup for zekALS..."
 
 # 1. Install Chocolatey (if not present)
 if (-not (Get-Command choco -ErrorAction SilentlyContinue)) {
