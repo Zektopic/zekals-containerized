@@ -17,8 +17,8 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME_BACKEND: ${{ github.repository }}/pf-backend
-  IMAGE_NAME_FRONTEND: ${{ github.repository }}/pf-frontend
+  IMAGE_NAME_BACKEND: ${{ github.repository }}/za-backend
+  IMAGE_NAME_FRONTEND: ${{ github.repository }}/za-frontend
 
 jobs:
   build-backend:
@@ -58,16 +58,16 @@ jobs:
           type=sha,prefix=
           type=raw,value=latest,enable={{is_default_branch}}
         labels: |
-          org.opencontainers.image.title=Project F.O.N.E Backend
+          org.opencontainers.image.title=zekALS Backend
           org.opencontainers.image.description=Eye-tracking backend service using MediaPipe
-          org.opencontainers.image.vendor=Project F.O.N.E
+          org.opencontainers.image.vendor=zekALS
           org.opencontainers.image.licenses=MIT
 
     - name: Build and push Docker image
       uses: docker/build-push-action@v5
       with:
-        context: ./pf-backend
-        file: ./pf-backend/Dockerfile
+        context: ./za-backend
+        file: ./za-backend/Dockerfile
         push: ${{ github.event_name != 'pull_request' }}
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
@@ -112,16 +112,16 @@ jobs:
           type=sha,prefix=
           type=raw,value=latest,enable={{is_default_branch}}
         labels: |
-          org.opencontainers.image.title=Project F.O.N.E Frontend
+          org.opencontainers.image.title=zekALS Frontend
           org.opencontainers.image.description=Web interface with virtual keyboard and AI suggestions
-          org.opencontainers.image.vendor=Project F.O.N.E
+          org.opencontainers.image.vendor=zekALS
           org.opencontainers.image.licenses=MIT
 
     - name: Build and push Docker image
       uses: docker/build-push-action@v5
       with:
-        context: ./pf-frontend
-        file: ./pf-frontend/Dockerfile
+        context: ./za-frontend
+        file: ./za-frontend/Dockerfile
         push: ${{ github.event_name != 'pull_request' }}
         tags: ${{ steps.meta.outputs.tags }}
         labels: ${{ steps.meta.outputs.labels }}
@@ -192,8 +192,8 @@ jobs:
     - name: Update README with latest image tags
       run: |
         # Update README with current image information
-        sed -i "s|ghcr.io/.*pf-backend.*|ghcr.io/${{ github.repository }}/pf-backend:latest|g" README.md
-        sed -i "s|ghcr.io/.*pf-frontend.*|ghcr.io/${{ github.repository }}/pf-frontend:latest|g" README.md
+        sed -i "s|ghcr.io/.*za-backend.*|ghcr.io/${{ github.repository }}/za-backend:latest|g" README.md
+        sed -i "s|ghcr.io/.*za-frontend.*|ghcr.io/${{ github.repository }}/za-frontend:latest|g" README.md
         
         # Update last build date
         echo "Last built: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> .build-info

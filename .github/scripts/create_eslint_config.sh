@@ -2,7 +2,7 @@
 set -e
 
 # Create the eslint config file
-cat > pf-frontend/eslint.config.js << 'EOF'
+cat > za-frontend/eslint.config.js << 'EOF'
 const globals = require("globals");
 const js = require("@eslint/js");
 

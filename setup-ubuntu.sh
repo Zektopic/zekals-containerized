@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# Project F.O.N.E - Ubuntu Setup Script
+# zekALS - Ubuntu Setup Script
 # This script sets up the complete assistive communication system on Ubuntu
 
 set -e  # Exit on any error
 
-echo "🚀 Project F.O.N.E - Ubuntu Setup Script"
+echo "🚀 zekALS - Ubuntu Setup Script"
 echo "======================================="
 echo ""
 
@@ -39,7 +39,7 @@ if [ "$EUID" -eq 0 ]; then
     exit 1
 fi
 
-print_status "Starting Ubuntu setup for Project F.O.N.E..."
+print_status "Starting Ubuntu setup for zekALS..."
 
 # Update package list
 print_status "Updating package list..."
@@ -86,11 +86,11 @@ source venv/bin/activate
 # Install Python dependencies
 print_status "Installing Python dependencies..."
 pip install --upgrade pip
-pip install -r pf-backend/requirements.txt
+pip install -r za-backend/requirements.txt
 
 # Install Node.js dependencies
 print_status "Installing Node.js dependencies..."
-cd pf-frontend
+cd za-frontend
 npm install
 cd ..
 

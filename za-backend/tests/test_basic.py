@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Basic tests for Project F.O.N.E backend
+Basic tests for zekALS backend
 Tests core functionality without requiring hardware dependencies
 """
 

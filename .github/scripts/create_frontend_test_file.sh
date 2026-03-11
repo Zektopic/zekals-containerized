@@ -2,10 +2,10 @@
 set -e
 
 # Create the tests directory if it doesn't exist
-mkdir -p pf-frontend/test
+mkdir -p za-frontend/test
 
 # Create the test file
-cat > pf-frontend/test/basic.test.js << 'EOF'
+cat > za-frontend/test/basic.test.js << 'EOF'
 const request = require('supertest');
 const express = require('express');
 const path = require('path');
