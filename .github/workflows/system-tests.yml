@@ -107,19 +107,19 @@ jobs:
     - name: Test container health
       run: |
         # Check container status
-        if docker compose ps | grep -q "za-backend.*Up"; then
+        if docker compose ps vision | grep -qE "Up|running"; then
           echo "✅ Backend container is running"
         else
           echo "❌ Backend container not running"
-          docker compose logs za-backend
+          docker compose logs vision
           exit 1
         fi
         
-        if docker compose ps | grep -q "za-frontend.*Up"; then
+        if docker compose ps ui | grep -qE "Up|running"; then
           echo "✅ Frontend container is running"
         else
           echo "❌ Frontend container not running"
-          docker compose logs za-frontend
+          docker compose logs ui
           exit 1
         fi
 
@@ -127,9 +127,9 @@ jobs:
       if: failure()
       run: |
         echo "=== Backend Logs ==="
-        docker compose logs za-backend
+        docker compose logs vision
         echo "=== Frontend Logs ==="
-        docker compose logs za-frontend
+        docker compose logs ui
 
     - name: Cleanup
       if: always()
