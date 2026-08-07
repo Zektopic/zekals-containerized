@@ -8,15 +8,20 @@
     "dev": "nodemon server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": ["ALS", "communication", "eye-tracking", "accessibility"],
+  "keywords": [
+    "ALS",
+    "communication",
+    "eye-tracking",
+    "accessibility"
+  ],
   "author": "Your Name",
   "license": "MIT",
   "dependencies": {
-    "express": "^4.18.2",
-    "ws": "^8.14.2",
-    "cors": "^2.8.5",
     "@google/generative-ai": "^0.2.1",
-    "dotenv": "^16.3.1"
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^5.2.1",
+    "ws": "^8.21.2"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"
