@@ -195,7 +195,7 @@ class ALSCommunicationApp {
         try {
             // Connect to the Node.js server's WebSocket
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const wsUrl = `${protocol}//${window.location.hostname}:8080`;
+            const wsUrl = `${protocol}//${window.location.host}/ws`;
             
             this.websocket = new WebSocket(wsUrl);
 
@@ -379,41 +379,17 @@ class ALSCommunicationApp {
     addText(text) {
         this.elements.textArea.value += text;
         this.elements.textArea.scrollTop = this.elements.textArea.scrollHeight;
-        
-        // Notify server of text change for AI suggestions
-        if (this.websocket && this.websocket.readyState === WebSocket.OPEN) {
-            this.websocket.send(JSON.stringify({
-                type: 'text_updated',
-                text: this.elements.textArea.value
-            }));
-        }
     }
 
     deleteLastCharacter() {
         const currentText = this.elements.textArea.value;
         if (currentText.length > 0) {
             this.elements.textArea.value = currentText.slice(0, -1);
-            
-            // Notify server of text change
-            if (this.websocket && this.websocket.readyState === WebSocket.OPEN) {
-                this.websocket.send(JSON.stringify({
-                    type: 'text_updated',
-                    text: this.elements.textArea.value
-                }));
-            }
         }
     }
 
     clearText() {
         this.elements.textArea.value = '';
-        
-        // Notify server of text change
-        if (this.websocket && this.websocket.readyState === WebSocket.OPEN) {
-            this.websocket.send(JSON.stringify({
-                type: 'text_updated',
-                text: ''
-            }));
-        }
     }
 
     speakText() {

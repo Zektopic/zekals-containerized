@@ -1,39 +1,12 @@
-# Use Node.js 18 Alpine image
-FROM node:18-alpine
-
-# Install system dependencies
-RUN apk add --no-cache \
-    dumb-init
-
-# Set working directory
+FROM node:22-alpine
 WORKDIR /app
-
-# Copy package files first for better caching
 COPY package*.json ./
-
-# Install Node.js dependencies
-RUN npm ci --only=production && npm cache clean --force
-
-# Copy the application code
-COPY . .
-
-# Create non-root user
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nodejs -u 1001
-
-# Change ownership of the app directory
-RUN chown -R nodejs:nodejs /app
-USER nodejs
-
-# Expose the port
+RUN npm ci --omit=dev && npm cache clean --force
+COPY --chown=node:node server.js ./
+COPY --chown=node:node public ./public
+COPY --chown=node:node languages ./languages
+USER node
+ENV NODE_ENV=production HOST=0.0.0.0 PORT=3000
 EXPOSE 3000
-
-# Set environment variables
-ENV NODE_ENV=production
-ENV PORT=3000
-
-# Use dumb-init for proper signal handling
-ENTRYPOINT ["dumb-init", "--"]
-
-# Start the application
+HEALTHCHECK --interval=30s --timeout=3s CMD node -e "fetch('http://localhost:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 CMD ["node", "server.js"]
