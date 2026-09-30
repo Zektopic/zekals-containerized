@@ -1,19 +1,21 @@
 import { Dwell, removeLastGrapheme, fitCalibration, mapGaze } from './access.mjs';
+import { NeuralSpeech } from './speech.mjs';
 const $ = id => document.getElementById(id);
-const defaults = { language: 'en', dwell: 1200, scan: 1400, large: false, contrast: false, rate: 0.9, voice: '' };
+const defaults = { language: 'en', dwell: 1200, scan: 1400, large: false, contrast: false, rate: 0.9, voice: '', engine: 'device' };
 let saved = {};
 try { saved = JSON.parse(localStorage.getItem('zekals.preferences') || '{}'); } catch { /* Storage may be disabled. */ }
 const settings = { ...defaults, ...saved };
 for (const [key, min, max] of [['dwell', 500, 3000], ['scan', 600, 4000], ['rate', 0.5, 1.5]]) {
   settings[key] = Number.isFinite(settings[key]) ? Math.max(min, Math.min(max, settings[key])) : defaults[key];
 }
-let pack, catalog = [], voices = [], voiceIndex = -1, numbers = false, mode = 'manual', paused = false;
+let pack, catalog = [], voices = [], voiceIndex = -1, keyboardPage = 0, mode = 'manual', paused = false;
 let lastValue = '', history = [], pointerTarget = null, gazeTarget = null, highlighted = null;
 let tracked = false, lastGaze = 0, rawGaze = null, calibration = null, calibrationRun = null;
 let scanIndex = -1, scanned = null, lastScan = 0, socket, reconnectTimer, reconnectAttempt = 0;
 let languageRequest = 0, blockedTarget = null;
 const dwell = new Dwell(settings.dwell);
 const notices = text => { $('notice').textContent = text; };
+const neuralSpeech = new NeuralSpeech(notices);
 const tr = (key, fallback) => pack?.ui?.[key] || fallback;
 const save = () => { try { localStorage.setItem('zekals.preferences', JSON.stringify(settings)); } catch { /* Session still works. */ } };
 const allButtons = () => [...(document.querySelector('dialog[open]') || document).querySelectorAll('button')]
@@ -46,9 +48,10 @@ function renderPack() {
     const value = pack.ui?.[element.dataset.i18n]; if (value) element.textContent = value;
   });
   $('message').placeholder = pack.ui?.textPlaceholder || 'Type here, choose a phrase, or use the keyboard below.';
-  $('keyboard-page').textContent = numbers ? tr('letters', 'Letters') : tr('numbers', 'Numbers & symbols');
+  $('keyboard-page').textContent = `${tr('moreKeys', 'More characters')} › ${keyboardPage + 1}/${(pack.keyboardPages?.length || 0) + 2}`;
   $('keyboard').replaceChildren();
-  const keys = numbers ? [...'1234567890.,?!:;+-=()@'] : pack.keyboard.flat().filter(key => typeof key === 'string');
+  const pages = [pack.keyboard.flat(), ...(pack.keyboardPages || []), [...'1234567890.,?!:;+-=()@']];
+  const keys = pages[keyboardPage] || pages[0];
   keys.forEach(key => $('keyboard').append(makeButton(key, () => append(key))));
   $('phrases').replaceChildren();
   const phrases = pack.phrases || ['Yes', 'No', 'Thank you', 'I need help', 'I need water', 'Please wait', 'I am uncomfortable', 'I love you'];
@@ -62,7 +65,7 @@ async function loadLanguage(code) {
     if (!response.ok) throw new Error('Unavailable language');
     const next = await response.json();
     if (request !== languageRequest) return;
-    pack = next; settings.language = code; numbers = false; save(); renderPack();
+    pack = next; settings.language = code; keyboardPage = 0; save(); renderPack();
   } catch { notices('Language could not be loaded. Your current message is still here.'); }
 }
 function syncPreferences() {
@@ -74,6 +77,7 @@ function syncPreferences() {
   $('scan-label').textContent = `${tr('scanTime', 'Scan interval')}: ${(settings.scan / 1000).toFixed(1)} s`;
   $('rate-label').textContent = `${tr('speechSpeed', 'Speech speed')}: ${settings.rate.toFixed(1)}×`;
   $('pause').textContent = paused ? tr('resume', 'Resume selection') : tr('pause', 'Pause selection');
+  $('speech-engine').textContent = settings.engine === 'neural' ? tr('neuralVoice', 'Local neural voice') : tr('deviceVoice', 'Device voice');
   dwell.duration = settings.dwell;
 }
 function refreshVoices() {
@@ -83,11 +87,11 @@ function refreshVoices() {
   if (voiceIndex < 0 && voices.length) voiceIndex = 0;
   $('voice-next').textContent = voices[voiceIndex]?.name || tr('noVoice', 'No local voice installed');
 }
-function stopSpeaking() { window.speechSynthesis?.cancel(); window.zekalsSpeech?.stop(); }
+function stopSpeaking() { window.speechSynthesis?.cancel(); neuralSpeech.stop(); }
 function speak() {
   const text = $('message').value.trim(); if (!text) { notices(tr('emptyMessage', 'Write a message first.')); return; }
   stopSpeaking();
-  if (window.zekalsSpeech) { window.zekalsSpeech.speak(text, pack, settings); return; }
+  if (settings.engine === 'neural') { neuralSpeech.speak(text, pack, settings.rate); return; }
   if (!window.speechSynthesis || !voices[voiceIndex]) { notices(tr('installVoice', 'Install an offline voice for this language in device settings.')); return; }
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = pack.locale || pack.code; utterance.voice = voices[voiceIndex]; utterance.rate = settings.rate;
@@ -118,7 +122,7 @@ $('backspace').onclick = () => {
   const left = start === end ? removeLastGrapheme(input.value.slice(0, start), pack?.locale) : input.value.slice(0, start);
   record(left + input.value.slice(end)); input.setSelectionRange(left.length, left.length);
 };
-$('keyboard-page').onclick = () => { numbers = !numbers; renderPack(); };
+$('keyboard-page').onclick = () => { keyboardPage = (keyboardPage + 1) % ((pack.keyboardPages?.length || 0) + 2); renderPack(); };
 $('language-next').onclick = () => {
   const index = catalog.findIndex(language => language.code === settings.language);
   if (catalog.length) loadLanguage(catalog[(index + 1) % catalog.length].code);
@@ -135,6 +139,7 @@ for (const [id, key, delta, min, max] of [['dwell-less','dwell',-100,500,3000],[
 }
 $('text-size').onclick = () => { settings.large = !settings.large; syncPreferences(); save(); };
 $('contrast').onclick = () => { settings.contrast = !settings.contrast; syncPreferences(); save(); };
+$('speech-engine').onclick = () => { stopSpeaking(); settings.engine = settings.engine === 'neural' ? 'device' : 'neural'; syncPreferences(); save(); };
 $('voice-next').onclick = () => { if (voices.length) { voiceIndex = (voiceIndex + 1) % voices.length; settings.voice = voices[voiceIndex].voiceURI; save(); refreshVoices(); } };
 window.speechSynthesis?.addEventListener('voiceschanged', refreshVoices);
 document.addEventListener('pointermove', event => { pointerTarget = event.target.closest('button'); });
@@ -225,6 +230,6 @@ function tick(now) {
 async function init() {
   try { const response = await fetch('/api/languages'); catalog = await response.json(); } catch { catalog = [{ code: 'en', name: 'English' }]; }
   if (!catalog.some(item => item.code === settings.language)) settings.language = 'en';
-  await loadLanguage(settings.language); syncPreferences(); connect(); tick(performance.now());
+  await neuralSpeech.load(); await loadLanguage(settings.language); syncPreferences(); connect(); tick(performance.now());
 }
 init();

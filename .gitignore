@@ -93,3 +93,4 @@ models/
 playwright-report/
 test-results/
 *.wav
+.speech-venv/
