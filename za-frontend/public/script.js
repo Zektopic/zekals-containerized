@@ -1,457 +1,230 @@
-/**
- * ALS Communication System - Frontend JavaScript
- * Handles UI interactions, WebSocket communication, and dwell-to-click functionality
- */
-
-class ALSCommunicationApp {
-    constructor() {
-        this.currentLanguage = 'en';
-        this.languages = {};
-        this.websocket = null;
-        this.dwellTimeout = null;
-        this.dwellDuration = 2000; // 2 seconds
-        this.currentHoverElement = null;
-        this.cursorPosition = { x: 0, y: 0 };
-        
-        // DOM elements
-        this.elements = {
-            textArea: document.getElementById('text-area'),
-            suggestionsContainer: document.getElementById('suggestions-container'),
-            virtualKeyboard: document.getElementById('virtual-keyboard'),
-            cursorIndicator: document.getElementById('cursor-indicator'),
-            dwellProgress: document.getElementById('dwell-progress'),
-            loadingOverlay: document.getElementById('loading-overlay'),
-            languageToggle: document.getElementById('language-toggle'),
-            statusIndicator: document.getElementById('status-indicator'),
-            statusText: document.getElementById('status-text'),
-            speakButton: document.getElementById('speak-button'),
-            clearAllButton: document.getElementById('clear-all-button')
-        };
-
-        this.init();
-    }
-
-    async init() {
-        try {
-            // Load languages
-            await this.loadLanguages();
-            
-            // Setup event listeners
-            this.setupEventListeners();
-            
-            // Load default language
-            await this.switchLanguage(this.currentLanguage);
-            
-            // Connect to WebSocket
-            this.connectWebSocket();
-            
-            console.log('ALS Communication App initialized');
-        } catch (error) {
-            console.error('Failed to initialize app:', error);
-            this.showError('Failed to initialize application');
-        }
-    }
-
-    async loadLanguages() {
-        try {
-            const languages = ['en', 'el'];
-            
-            for (const lang of languages) {
-                const response = await fetch(`/languages/${lang}.json`);
-                if (response.ok) {
-                    this.languages[lang] = await response.json();
-                } else {
-                    console.warn(`Failed to load language: ${lang}`);
-                }
-            }
-            
-            console.log('Languages loaded:', Object.keys(this.languages));
-        } catch (error) {
-            console.error('Error loading languages:', error);
-            throw error;
-        }
-    }
-
-    setupEventListeners() {
-        // Language toggle
-        this.elements.languageToggle.addEventListener('click', () => {
-            this.toggleLanguage();
-        });
-
-        // Clear all button
-        this.elements.clearAllButton.addEventListener('click', () => {
-            this.clearText();
-        });
-
-        // Speak button (if speech synthesis is available)
-        if ('speechSynthesis' in window) {
-            this.elements.speakButton.addEventListener('click', () => {
-                this.speakText();
-            });
-        } else {
-            this.elements.speakButton.style.display = 'none';
-        }
-
-        // Mouse movement for testing (remove in production)
-        document.addEventListener('mousemove', (e) => {
-            if (!this.websocket || this.websocket.readyState !== WebSocket.OPEN) {
-                this.updateCursorPosition(e.clientX, e.clientY);
-            }
-        });
-
-        // Keyboard shortcuts
-        document.addEventListener('keydown', (e) => {
-            if (e.ctrlKey || e.metaKey) {
-                switch (e.key) {
-                    case 'l':
-                        e.preventDefault();
-                        this.toggleLanguage();
-                        break;
-                    case 'Backspace':
-                        e.preventDefault();
-                        this.deleteLastCharacter();
-                        break;
-                }
-            }
-        });
-    }
-
-    async switchLanguage(languageCode) {
-        if (!this.languages[languageCode]) {
-            console.error(`Language ${languageCode} not found`);
-            return;
-        }
-
-        this.currentLanguage = languageCode;
-        const language = this.languages[languageCode];
-
-        // Update UI text
-        document.getElementById('app-title').textContent = language.ui.title;
-        this.elements.textArea.placeholder = language.ui.textPlaceholder;
-        document.getElementById('suggestions-title').textContent = language.ui.suggestionsTitle;
-        this.elements.languageToggle.textContent = languageCode.toUpperCase();
-
-        // Generate keyboard
-        this.generateKeyboard(language.keyboard);
-
-        console.log(`Switched to language: ${language.name}`);
-    }
-
-    toggleLanguage() {
-        const currentIndex = Object.keys(this.languages).indexOf(this.currentLanguage);
-        const nextIndex = (currentIndex + 1) % Object.keys(this.languages).length;
-        const nextLanguage = Object.keys(this.languages)[nextIndex];
-        this.switchLanguage(nextLanguage);
-    }
-
-    generateKeyboard(keyboardLayout) {
-        this.elements.virtualKeyboard.innerHTML = '';
-
-        keyboardLayout.forEach(row => {
-            const rowElement = document.createElement('div');
-            rowElement.className = 'keyboard-row';
-
-            row.forEach(key => {
-                const button = document.createElement('button');
-                button.className = 'key-button';
-
-                if (typeof key === 'string') {
-                    // Simple character key
-                    button.textContent = key;
-                    button.dataset.value = key;
-                    button.dataset.action = 'char';
-                } else {
-                    // Special key with properties
-                    button.textContent = key.display;
-                    button.dataset.value = key.value;
-                    button.dataset.action = key.action;
-                    
-                    if (key.width) {
-                        button.classList.add(key.width);
-                    }
-                    
-                    if (key.special) {
-                        button.classList.add('special');
-                    }
-                }
-
-                // Add event listeners for dwell-to-click
-                button.addEventListener('mouseenter', () => {
-                    this.startDwellTimer(button);
-                });
-
-                button.addEventListener('mouseleave', () => {
-                    this.cancelDwellTimer();
-                });
-
-                rowElement.appendChild(button);
-            });
-
-            this.elements.virtualKeyboard.appendChild(rowElement);
-        });
-    }
-
-    connectWebSocket() {
-        try {
-            // Connect to the Node.js server's WebSocket
-            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const wsUrl = `${protocol}//${window.location.host}/ws`;
-            
-            this.websocket = new WebSocket(wsUrl);
-
-            this.websocket.onopen = () => {
-                console.log('Connected to server WebSocket');
-                this.updateConnectionStatus(true);
-                this.hideLoading();
-            };
-
-            this.websocket.onmessage = (event) => {
-                try {
-                    const data = JSON.parse(event.data);
-                    this.handleWebSocketMessage(data);
-                } catch (error) {
-                    console.error('Error parsing WebSocket message:', error);
-                }
-            };
-
-            this.websocket.onclose = () => {
-                console.log('WebSocket connection closed, attempting to reconnect...');
-                this.updateConnectionStatus(false);
-                this.showLoading('Reconnecting...');
-                setTimeout(() => this.connectWebSocket(), 3000);
-            };
-
-            this.websocket.onerror = (error) => {
-                console.error('WebSocket error:', error);
-                this.updateConnectionStatus(false);
-            };
-
-        } catch (error) {
-            console.error('Failed to connect WebSocket:', error);
-            this.showError('Failed to connect to server');
-        }
-    }
-
-    handleWebSocketMessage(data) {
-        switch (data.type) {
-            case 'cursor_position':
-                this.updateCursorPosition(data.x, data.y);
-                break;
-            
-            case 'suggestions':
-                this.updateSuggestions(data.suggestions);
-                break;
-            
-            default:
-                console.log('Unknown message type:', data.type);
-        }
-    }
-
-    updateCursorPosition(x, y) {
-        this.cursorPosition = { x, y };
-        
-        // Update visual cursor indicator
-        this.elements.cursorIndicator.style.left = `${x}px`;
-        this.elements.cursorIndicator.style.top = `${y}px`;
-        this.elements.cursorIndicator.classList.add('visible');
-
-        // Check for hover on interactive elements
-        const element = document.elementFromPoint(x, y);
-        this.handleHover(element);
-    }
-
-    handleHover(element) {
-        // Check if hovering over a clickable element
-        const clickableElement = element?.closest('.key-button, .suggestion-button');
-        
-        if (clickableElement !== this.currentHoverElement) {
-            this.cancelDwellTimer();
-            
-            if (clickableElement) {
-                this.startDwellTimer(clickableElement);
-            }
-        }
-    }
-
-    startDwellTimer(element) {
-        this.cancelDwellTimer();
-        
-        this.currentHoverElement = element;
-        
-        // Position dwell progress indicator
-        const rect = element.getBoundingClientRect();
-        const centerX = rect.left + rect.width / 2;
-        const centerY = rect.top + rect.height / 2;
-        
-        this.elements.dwellProgress.style.left = `${centerX}px`;
-        this.elements.dwellProgress.style.top = `${centerY}px`;
-        this.elements.dwellProgress.classList.remove('hidden');
-        
-        // Start progress animation
-        const progressCircle = this.elements.dwellProgress.querySelector('.dwell-ring-progress');
-        progressCircle.style.strokeDashoffset = '157';
-        
-        // Animate progress
-        let startTime = Date.now();
-        const animate = () => {
-            const elapsed = Date.now() - startTime;
-            const progress = Math.min(elapsed / this.dwellDuration, 1);
-            const offset = 157 - (progress * 157);
-            
-            progressCircle.style.strokeDashoffset = offset;
-            
-            if (progress < 1) {
-                requestAnimationFrame(animate);
-            }
-        };
-        requestAnimationFrame(animate);
-        
-        // Set timer for activation
-        this.dwellTimeout = setTimeout(() => {
-            this.activateElement(element);
-        }, this.dwellDuration);
-    }
-
-    cancelDwellTimer() {
-        if (this.dwellTimeout) {
-            clearTimeout(this.dwellTimeout);
-            this.dwellTimeout = null;
-        }
-        
-        this.elements.dwellProgress.classList.add('hidden');
-        this.currentHoverElement = null;
-    }
-
-    activateElement(element) {
-        this.cancelDwellTimer();
-        
-        if (element.classList.contains('key-button')) {
-            this.handleKeyPress(element);
-        } else if (element.classList.contains('suggestion-button')) {
-            this.handleSuggestionClick(element);
-        }
-        
-        // Visual feedback
-        element.style.transform = 'scale(0.95)';
-        setTimeout(() => {
-            element.style.transform = '';
-        }, 150);
-    }
-
-    handleKeyPress(keyElement) {
-        const action = keyElement.dataset.action;
-        const value = keyElement.dataset.value;
-
-        switch (action) {
-            case 'char':
-            case 'space':
-            case 'enter':
-                this.addText(value);
-                break;
-            
-            case 'backspace':
-                this.deleteLastCharacter();
-                break;
-            
-            case 'clear':
-                this.clearText();
-                break;
-            
-            case 'language':
-                this.toggleLanguage();
-                break;
-            
-            case 'numbers':
-                // TODO: Implement number keyboard
-                console.log('Numbers keyboard not implemented yet');
-                break;
-            
-            default:
-                console.warn('Unknown key action:', action);
-        }
-    }
-
-    handleSuggestionClick(suggestionElement) {
-        const text = suggestionElement.textContent;
-        this.addText(text);
-    }
-
-    addText(text) {
-        this.elements.textArea.value += text;
-        this.elements.textArea.scrollTop = this.elements.textArea.scrollHeight;
-    }
-
-    deleteLastCharacter() {
-        const currentText = this.elements.textArea.value;
-        if (currentText.length > 0) {
-            this.elements.textArea.value = currentText.slice(0, -1);
-        }
-    }
-
-    clearText() {
-        this.elements.textArea.value = '';
-    }
-
-    speakText() {
-        if ('speechSynthesis' in window && this.elements.textArea.value) {
-            const utterance = new SpeechSynthesisUtterance(this.elements.textArea.value);
-            utterance.lang = this.currentLanguage === 'el' ? 'el-GR' : 'en-US';
-            speechSynthesis.speak(utterance);
-        }
-    }
-
-    updateSuggestions(suggestions) {
-        this.elements.suggestionsContainer.innerHTML = '';
-
-        if (!suggestions || suggestions.length === 0) {
-            return;
-        }
-
-        suggestions.forEach(suggestion => {
-            const button = document.createElement('button');
-            button.className = 'suggestion-button';
-            button.textContent = suggestion;
-            
-            // Add hover event listeners
-            button.addEventListener('mouseenter', () => {
-                this.startDwellTimer(button);
-            });
-
-            button.addEventListener('mouseleave', () => {
-                this.cancelDwellTimer();
-            });
-
-            this.elements.suggestionsContainer.appendChild(button);
-        });
-    }
-
-    updateConnectionStatus(connected) {
-        if (connected) {
-            this.elements.statusIndicator.classList.add('connected');
-            this.elements.statusText.textContent = 'Connected';
-        } else {
-            this.elements.statusIndicator.classList.remove('connected');
-            this.elements.statusText.textContent = 'Disconnected';
-        }
-    }
-
-    showLoading(message = 'Loading...') {
-        document.getElementById('loading-text').textContent = message;
-        this.elements.loadingOverlay.classList.remove('hidden');
-    }
-
-    hideLoading() {
-        this.elements.loadingOverlay.classList.add('hidden');
-    }
-
-    showError(message) {
-        console.error(message);
-        // TODO: Implement proper error display
-        alert(message);
-    }
+import { Dwell, removeLastGrapheme, fitCalibration, mapGaze } from './access.mjs';
+const $ = id => document.getElementById(id);
+const defaults = { language: 'en', dwell: 1200, scan: 1400, large: false, contrast: false, rate: 0.9, voice: '' };
+let saved = {};
+try { saved = JSON.parse(localStorage.getItem('zekals.preferences') || '{}'); } catch { /* Storage may be disabled. */ }
+const settings = { ...defaults, ...saved };
+for (const [key, min, max] of [['dwell', 500, 3000], ['scan', 600, 4000], ['rate', 0.5, 1.5]]) {
+  settings[key] = Number.isFinite(settings[key]) ? Math.max(min, Math.min(max, settings[key])) : defaults[key];
 }
-
-// Initialize the app when DOM is loaded
-document.addEventListener('DOMContentLoaded', () => {
-    window.alsApp = new ALSCommunicationApp();
+let pack, catalog = [], voices = [], voiceIndex = -1, numbers = false, mode = 'manual', paused = false;
+let lastValue = '', history = [], pointerTarget = null, gazeTarget = null, highlighted = null;
+let tracked = false, lastGaze = 0, rawGaze = null, calibration = null, calibrationRun = null;
+let scanIndex = -1, scanned = null, lastScan = 0, socket, reconnectTimer, reconnectAttempt = 0;
+let languageRequest = 0, blockedTarget = null;
+const dwell = new Dwell(settings.dwell);
+const notices = text => { $('notice').textContent = text; };
+const tr = (key, fallback) => pack?.ui?.[key] || fallback;
+const save = () => { try { localStorage.setItem('zekals.preferences', JSON.stringify(settings)); } catch { /* Session still works. */ } };
+const allButtons = () => [...(document.querySelector('dialog[open]') || document).querySelectorAll('button')]
+  .filter(button => !button.disabled && button.getClientRects().length && (!paused || button.id === 'pause'));
+function resetDwell() {
+  if (highlighted) { highlighted.classList.remove('dwell-target'); highlighted.style.removeProperty('--dwell-progress'); }
+  highlighted = null; dwell.reset();
+}
+function record(value) {
+  if (value === lastValue) return;
+  history.push(lastValue); if (history.length > 30) history.shift();
+  lastValue = value; $('message').value = value; updateCount();
+}
+function updateCount() { $('character-count').textContent = `${$('message').value.length} / 2000`; }
+function append(text) {
+  const input = $('message'), start = input.selectionStart, end = input.selectionEnd;
+  const value = input.value.slice(0, start) + text + input.value.slice(end);
+  if (value.length > 2000) { notices(tr('messageFull', 'Your message is full. Speak or clear it before adding more.')); return; }
+  record(value); input.setSelectionRange(start + text.length, start + text.length);
+}
+function makeButton(label, action) {
+  const button = document.createElement('button'); button.type = 'button'; button.textContent = label;
+  button.addEventListener('click', action); return button;
+}
+function renderPack() {
+  resetDwell(); document.documentElement.lang = pack.locale || pack.code;
+  document.documentElement.dir = pack.direction || 'ltr';
+  $('language-label').textContent = pack.name; $('language-next').textContent = `${pack.name} ›`;
+  document.querySelectorAll('[data-i18n]').forEach(element => {
+    const value = pack.ui?.[element.dataset.i18n]; if (value) element.textContent = value;
+  });
+  $('message').placeholder = pack.ui?.textPlaceholder || 'Type here, choose a phrase, or use the keyboard below.';
+  $('keyboard-page').textContent = numbers ? tr('letters', 'Letters') : tr('numbers', 'Numbers & symbols');
+  $('keyboard').replaceChildren();
+  const keys = numbers ? [...'1234567890.,?!:;+-=()@'] : pack.keyboard.flat().filter(key => typeof key === 'string');
+  keys.forEach(key => $('keyboard').append(makeButton(key, () => append(key))));
+  $('phrases').replaceChildren();
+  const phrases = pack.phrases || ['Yes', 'No', 'Thank you', 'I need help', 'I need water', 'Please wait', 'I am uncomfortable', 'I love you'];
+  phrases.forEach(phrase => $('phrases').append(makeButton(phrase, () => append(($('message').value ? ' ' : '') + phrase))));
+  syncPreferences(); refreshVoices();
+}
+async function loadLanguage(code) {
+  const request = ++languageRequest;
+  try {
+    const response = await fetch(`/languages/${encodeURIComponent(code)}.json`);
+    if (!response.ok) throw new Error('Unavailable language');
+    const next = await response.json();
+    if (request !== languageRequest) return;
+    pack = next; settings.language = code; numbers = false; save(); renderPack();
+  } catch { notices('Language could not be loaded. Your current message is still here.'); }
+}
+function syncPreferences() {
+  document.body.classList.toggle('large', Boolean(settings.large));
+  document.body.classList.toggle('high-contrast', Boolean(settings.contrast));
+  $('text-size').textContent = settings.large ? tr('large', 'Large') : tr('standard', 'Standard');
+  $('contrast').textContent = settings.contrast ? tr('highContrast', 'High contrast') : tr('dark', 'Dark');
+  $('dwell-label').textContent = `${tr('dwellTime', 'Dwell time')}: ${(settings.dwell / 1000).toFixed(1)} s`;
+  $('scan-label').textContent = `${tr('scanTime', 'Scan interval')}: ${(settings.scan / 1000).toFixed(1)} s`;
+  $('rate-label').textContent = `${tr('speechSpeed', 'Speech speed')}: ${settings.rate.toFixed(1)}×`;
+  $('pause').textContent = paused ? tr('resume', 'Resume selection') : tr('pause', 'Pause selection');
+  dwell.duration = settings.dwell;
+}
+function refreshVoices() {
+  const language = (pack?.locale || settings.language).split('-')[0].toLowerCase();
+  voices = (window.speechSynthesis?.getVoices() || []).filter(voice => voice.lang.toLowerCase().split('-')[0] === language && voice.localService);
+  voiceIndex = voices.findIndex(voice => voice.voiceURI === settings.voice);
+  if (voiceIndex < 0 && voices.length) voiceIndex = 0;
+  $('voice-next').textContent = voices[voiceIndex]?.name || tr('noVoice', 'No local voice installed');
+}
+function stopSpeaking() { window.speechSynthesis?.cancel(); window.zekalsSpeech?.stop(); }
+function speak() {
+  const text = $('message').value.trim(); if (!text) { notices(tr('emptyMessage', 'Write a message first.')); return; }
+  stopSpeaking();
+  if (window.zekalsSpeech) { window.zekalsSpeech.speak(text, pack, settings); return; }
+  if (!window.speechSynthesis || !voices[voiceIndex]) { notices(tr('installVoice', 'Install an offline voice for this language in device settings.')); return; }
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = pack.locale || pack.code; utterance.voice = voices[voiceIndex]; utterance.rate = settings.rate;
+  utterance.onerror = event => { if (!['interrupted', 'canceled'].includes(event.error)) notices(tr('speechFailed', 'Speech could not start. Check your device voice and volume.')); };
+  utterance.onend = () => notices(tr('ready', 'Ready when you are.'));
+  speechSynthesis.speak(utterance); notices(tr('speaking', 'Speaking…'));
+}
+function setPaused(value) {
+  paused = value; resetDwell(); document.body.classList.toggle('paused', paused);
+  $('pause').setAttribute('aria-pressed', String(paused)); syncPreferences();
+  notices(paused ? tr('paused', 'Automatic selection paused. Touch and keyboard still work.') : tr('ready', 'Ready when you are.'));
+}
+function setMode(value) {
+  mode = value; pointerTarget = gazeTarget = null; resetDwell(); lastScan = 0;
+  document.querySelectorAll('[data-mode]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.mode === mode)));
+  $('mode-hint').textContent = ({ manual: tr('manualHint', 'Use a mouse, touch, or keyboard. Change access mode in Settings.'),
+    dwell: tr('dwellHint', 'Hold the pointer over a button to choose it. Move away before choosing again.'),
+    scan: tr('scanHint', 'Press Space to choose the highlighted button. Escape pauses scanning.'),
+    gaze: tr('gazeHint', 'Calibrate in Settings before choosing buttons with your eyes.') })[mode];
+}
+$('message').addEventListener('input', () => record($('message').value));
+$('speak').onclick = speak; $('stop').onclick = () => { stopSpeaking(); notices(tr('stopped', 'Speech stopped.')); };
+$('clear').onclick = () => { record(''); notices(tr('cleared', 'Message cleared. Undo restores it.')); };
+$('undo').onclick = () => { if (history.length) { lastValue = history.pop(); $('message').value = lastValue; updateCount(); } };
+$('space').onclick = () => append(' ');
+$('backspace').onclick = () => {
+  const input = $('message'), start = input.selectionStart, end = input.selectionEnd;
+  const left = start === end ? removeLastGrapheme(input.value.slice(0, start), pack?.locale) : input.value.slice(0, start);
+  record(left + input.value.slice(end)); input.setSelectionRange(left.length, left.length);
+};
+$('keyboard-page').onclick = () => { numbers = !numbers; renderPack(); };
+$('language-next').onclick = () => {
+  const index = catalog.findIndex(language => language.code === settings.language);
+  if (catalog.length) loadLanguage(catalog[(index + 1) % catalog.length].code);
+};
+$('pause').onclick = () => setPaused(!paused);
+$('settings-open').onclick = () => { resetDwell(); $('settings').showModal(); };
+$('settings-close').onclick = () => { resetDwell(); $('settings').close(); };
+$('settings').addEventListener('close', resetDwell);
+$('settings').addEventListener('cancel', () => setPaused(true));
+for (const button of document.querySelectorAll('[data-mode]')) button.onclick = () => setMode(button.dataset.mode);
+for (const [id, key, delta, min, max] of [['dwell-less','dwell',-100,500,3000],['dwell-more','dwell',100,500,3000],
+  ['scan-less','scan',-200,600,4000],['scan-more','scan',200,600,4000],['rate-less','rate',-.1,.5,1.5],['rate-more','rate',.1,.5,1.5]]) {
+  $(id).onclick = () => { settings[key] = Math.round(Math.max(min, Math.min(max, settings[key] + delta)) * 10) / 10; syncPreferences(); save(); };
+}
+$('text-size').onclick = () => { settings.large = !settings.large; syncPreferences(); save(); };
+$('contrast').onclick = () => { settings.contrast = !settings.contrast; syncPreferences(); save(); };
+$('voice-next').onclick = () => { if (voices.length) { voiceIndex = (voiceIndex + 1) % voices.length; settings.voice = voices[voiceIndex].voiceURI; save(); refreshVoices(); } };
+window.speechSynthesis?.addEventListener('voiceschanged', refreshVoices);
+document.addEventListener('pointermove', event => { pointerTarget = event.target.closest('button'); });
+document.addEventListener('pointerout', event => { if (!event.relatedTarget) { pointerTarget = null; resetDwell(); } });
+document.addEventListener('pointerdown', () => { resetDwell(); pointerTarget = null; });
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape') { setPaused(true); stopSpeaking(); }
+  if (mode === 'scan' && event.code === 'Space') {
+    event.preventDefault();
+    if (!event.repeat && !paused && scanned?.isConnected) { scanned.click(); lastScan = performance.now(); }
+    else if (!event.repeat && paused) setPaused(false);
+  }
 });
+document.addEventListener('visibilitychange', () => { if (document.hidden) { setPaused(true); stopSpeaking(); } });
+window.addEventListener('resize', () => { calibration = null; resetDwell(); });
+function invalidateGaze() { tracked = false; gazeTarget = null; $('gaze-cursor').hidden = true; if (mode === 'gaze') resetDwell(); }
+function connect() {
+  socket = new WebSocket(`${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/ws`);
+  socket.onopen = () => { reconnectAttempt = 0; };
+  socket.onmessage = event => {
+    let value; try { value = JSON.parse(event.data); } catch { return; }
+    if (value.type !== 'gaze') return;
+    if (!value.valid || !Number.isFinite(value.x) || !Number.isFinite(value.y) || value.x < 0 || value.x > 1 || value.y < 0 || value.y > 1) {
+      invalidateGaze(); $('tracking-status').textContent = tr('pointerReady', 'Pointer ready · camera unavailable'); return;
+    }
+    tracked = true; lastGaze = performance.now(); rawGaze = [value.x, value.y];
+    $('tracking-status').textContent = tr('cameraReady', 'Camera connected');
+    if (calibrationRun && lastGaze - calibrationRun.started > 1500) calibrationRun.points.push(rawGaze);
+    if (mode === 'gaze' && calibration) {
+      const [nx, ny] = mapGaze(calibration, value.x, value.y);
+      const x = Math.min(innerWidth - 1, nx * innerWidth), y = Math.min(innerHeight - 1, ny * innerHeight);
+      $('gaze-cursor').hidden = false; $('gaze-cursor').style.left = `${x}px`; $('gaze-cursor').style.top = `${y}px`;
+      gazeTarget = document.elementFromPoint(x, y)?.closest('button');
+    }
+  };
+  socket.onclose = () => {
+    invalidateGaze(); $('tracking-status').textContent = tr('pointerReady', 'Pointer ready · camera unavailable');
+    reconnectTimer = setTimeout(connect, Math.min(30000, 500 * 2 ** Math.min(reconnectAttempt++, 6)));
+  };
+  socket.onerror = () => { invalidateGaze(); };
+}
+window.addEventListener('pagehide', () => { clearTimeout(reconnectTimer); socket.onclose = null; socket.close(); stopSpeaking(); });
+const targets = [[.15,.18],[.85,.18],[.5,.5],[.15,.82],[.85,.82]];
+function nextCalibration(index = 0, samples = []) {
+  if (index === targets.length) {
+    try { calibration = fitCalibration(samples); notices(tr('calibrated', 'Calibration saved for this window. Try the large phrase buttons first.')); setMode('gaze'); }
+    catch (error) { calibration = null; notices(error.message); }
+    calibrationRun = null; $('calibration').close(); return;
+  }
+  calibrationRun = { index, samples, points: [], started: performance.now() };
+  const [x,y] = targets[index]; $('calibration-target').style.left = `${x * 100}%`; $('calibration-target').style.top = `${y * 100}%`;
+  $('calibration-info').textContent = `${tr('lookTarget', 'Look at the target and hold still')}. ${index + 1} / 5`;
+}
+$('calibrate').onclick = () => {
+  if (!tracked) { notices(tr('needCamera', 'Connect the camera service before calibration.')); return; }
+  resetDwell(); $('settings').close(); $('calibration').showModal(); nextCalibration();
+};
+$('calibration-cancel').onclick = () => { calibrationRun = null; $('calibration').close(); resetDwell(); };
+$('calibration').addEventListener('cancel', () => { calibrationRun = null; resetDwell(); });
+function tick(now) {
+  if (tracked && now - lastGaze > 400) invalidateGaze();
+  if (calibrationRun && now - calibrationRun.started >= 3000) {
+    const run = calibrationRun;
+    if (!tracked || run.points.length < 5) { calibrationRun = null; $('calibration').close(); notices(tr('calibrationLost', 'Tracking lost during calibration. Please retry.')); }
+    else {
+      const raw = [0,1].map(axis => run.points.reduce((sum, point) => sum + point[axis], 0) / run.points.length);
+      nextCalibration(run.index + 1, [...run.samples, { raw, target: targets[run.index] }]);
+    }
+  }
+  if (mode === 'scan' && !paused && !document.hidden && !calibrationRun && now - lastScan >= settings.scan) {
+    const buttons = allButtons(); scanned?.classList.remove('scan-target');
+    scanIndex = (scanIndex + 1) % Math.max(1, buttons.length); scanned = buttons[scanIndex];
+    scanned?.classList.add('scan-target'); scanned?.scrollIntoView({ block: 'nearest', behavior: 'instant' }); lastScan = now;
+  } else if (mode !== 'scan' || paused) { scanned?.classList.remove('scan-target'); scanned = null; }
+  let target = mode === 'dwell' ? pointerTarget : mode === 'gaze' && tracked && calibration ? gazeTarget : null;
+  if (target !== blockedTarget) blockedTarget = null;
+  if (target === blockedTarget || document.hidden || calibrationRun || !target?.isConnected || !target?.getClientRects().length || target?.disabled || (paused && target?.id !== 'pause') ||
+    (document.querySelector('dialog[open]') && !target?.closest('dialog[open]'))) target = null;
+  if (target !== highlighted) { resetDwell(); highlighted = target; }
+  const state = dwell.update(target, now);
+  if (target) {
+    target.classList.add('dwell-target'); target.style.setProperty('--dwell-progress', `${state.progress * 100}%`);
+    if (state.activate) { blockedTarget = target; target.click(); }
+  }
+  // Idle/manual access does no hit testing or inference. One timer also controls stale gaze.
+  setTimeout(() => tick(performance.now()), mode === 'manual' && !calibrationRun ? 150 : 40);
+}
+async function init() {
+  try { const response = await fetch('/api/languages'); catalog = await response.json(); } catch { catalog = [{ code: 'en', name: 'English' }]; }
+  if (!catalog.some(item => item.code === settings.language)) settings.language = 'en';
+  await loadLanguage(settings.language); syncPreferences(); connect(); tick(performance.now());
+}
+init();

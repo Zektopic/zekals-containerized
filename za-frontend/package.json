@@ -4,7 +4,18 @@
   "private": true,
   "description": "Local assistive communication interface",
   "main": "server.js",
-  "engines": { "node": ">=22" },
-  "scripts": { "start": "node --env-file-if-exists=../.env server.js", "test": "node --test test/*.test.js" },
-  "dependencies": { "ws": "8.22.0" }
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node --env-file-if-exists=../.env server.js",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "ws": "8.22.0"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
+    "@playwright/test": "1.63.0"
+  }
 }
