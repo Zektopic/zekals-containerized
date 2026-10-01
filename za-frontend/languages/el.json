@@ -102,7 +102,10 @@
     "calibrated": "Calibration saved for this window. Try the large phrase buttons first.",
     "needCamera": "Connect the camera service before calibration.",
     "lookTarget": "Look at the target and hold still",
-    "calibrationLost": "Tracking lost during calibration. Please retry."
+    "calibrationLost": "Tracking lost during calibration. Please retry.",
+    "scrollUp": "Κύλιση πάνω",
+    "scrollDown": "Κύλιση κάτω",
+    "joinLetters": "Σύνδεση γραμμάτων"
   },
   "schemaVersion": 1,
   "locale": "el-GR",

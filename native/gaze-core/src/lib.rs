@@ -30,11 +30,25 @@ pub extern "C" fn zekals_filter_step(
         return FilterState::default();
     }
     let elapsed = timestamp_ms - previous.timestamp_ms;
-    let alpha = if previous.valid == 0 || elapsed <= 0.0 || elapsed > 500.0 {
+    let alpha = if previous.valid == 0
+        || !previous.x.is_finite()
+        || !previous.y.is_finite()
+        || !previous.timestamp_ms.is_finite()
+        || elapsed <= 0.0
+        || elapsed > 500.0
+    {
         1.0
     } else {
         elapsed / (tau_ms + elapsed)
     };
+    if alpha == 1.0 {
+        return FilterState {
+            x,
+            y,
+            timestamp_ms,
+            valid: 1,
+        };
+    }
     FilterState {
         x: previous.x + alpha * (x - previous.x),
         y: previous.y + alpha * (y - previous.y),
@@ -61,6 +75,18 @@ mod tests {
         assert_eq!(next.x, 0.5);
         assert_eq!(zekals_filter_step(next, 1.0, 1.0, 1000.0, 100.0, 1).x, 1.0);
     }
+    #[test]
+    fn corrupted_previous_state_recovers_without_nonfinite_output() {
+        let previous = FilterState {
+            x: f64::NAN,
+            y: f64::INFINITY,
+            timestamp_ms: f64::NAN,
+            valid: 1,
+        };
+        let next = zekals_filter_step(previous, 0.2, 0.8, 10.0, 70.0, 1);
+        assert_eq!((next.x, next.y, next.valid), (0.2, 0.8, 1));
+    }
+
     #[test]
     fn rejects_invalid_configuration_and_out_of_bounds_input() {
         for x in [f64::NAN, f64::INFINITY, -0.1, 1.1] {

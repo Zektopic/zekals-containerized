@@ -17,6 +17,9 @@ reads the whole message. Stop cancels speech. Clear can be reversed using Undo;
 - **Eye tracking:** start the optional tracker, calibrate in Settings, and select
   buttons with your gaze. No gaze selection occurs before calibration succeeds.
 
+The fixed Scroll up and Scroll down controls let gaze, dwell and switch users reach
+content outside the viewport. The Pause control stays visible while scrolling.
+
 Escape pauses automatic selection and stops speech. Pause remains accessible;
 touch and physical keyboard work while automatic selection is paused. Hiding the
 tab pauses it. Lost or stale tracking cancels pending dwell. Disconnecting a
