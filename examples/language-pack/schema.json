@@ -1,0 +1,172 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "zekALS language pack v1",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "code",
+    "name",
+    "locale",
+    "direction",
+    "keyboard",
+    "keyboardPages",
+    "phrases",
+    "ui",
+    "speech"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "code": {
+      "type": "string",
+      "pattern": "^[a-z]{2,3}(-[A-Za-z0-9]+)*$"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80
+    },
+    "locale": {
+      "type": "string"
+    },
+    "direction": {
+      "enum": [
+        "ltr",
+        "rtl"
+      ]
+    },
+    "reviewStatus": {
+      "type": "string"
+    },
+    "keyboard": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 12,
+      "items": {
+        "type": "array",
+        "minItems": 1,
+        "maxItems": 80,
+        "items": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 16
+        }
+      }
+    },
+    "keyboardPages": {
+      "type": "array",
+      "maxItems": 10,
+      "items": {
+        "type": "array",
+        "maxItems": 80,
+        "items": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 16
+        }
+      }
+    },
+    "phrases": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 24,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      }
+    },
+    "ui": {
+      "type": "object",
+      "required": [
+        "tagline",
+        "settings",
+        "pause",
+        "resume",
+        "messageTitle",
+        "messageLabel",
+        "messageHint",
+        "textPlaceholder",
+        "speak",
+        "stop",
+        "undo",
+        "clear",
+        "phrases",
+        "phraseHint",
+        "keyboard",
+        "numbers",
+        "letters",
+        "space",
+        "backspace",
+        "done",
+        "settingsHint",
+        "accessMode",
+        "manual",
+        "dwell",
+        "scan",
+        "gaze",
+        "textSize",
+        "contrast",
+        "voice",
+        "calibration",
+        "calibrate",
+        "large",
+        "standard",
+        "highContrast",
+        "dark",
+        "dwellTime",
+        "scanTime",
+        "speechSpeed",
+        "noVoice",
+        "installVoice",
+        "emptyMessage",
+        "ready",
+        "speaking",
+        "stopped",
+        "cleared",
+        "paused",
+        "speechFailed",
+        "pointerReady",
+        "cameraReady",
+        "scanHelp",
+        "speechEngine",
+        "deviceVoice",
+        "neuralVoice",
+        "speechInfo",
+        "moreKeys",
+        "messageFull",
+        "manualHint",
+        "dwellHint",
+        "scanHint",
+        "gazeHint",
+        "calibrated",
+        "needCamera",
+        "lookTarget",
+        "calibrationLost"
+      ],
+      "additionalProperties": {
+        "type": "string",
+        "maxLength": 500
+      }
+    },
+    "speech": {
+      "type": "object",
+      "required": [
+        "locale",
+        "piperVoice"
+      ],
+      "properties": {
+        "locale": {
+          "type": "string"
+        },
+        "piperVoice": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    }
+  }
+}

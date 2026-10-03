@@ -4,6 +4,8 @@ const http = require('node:http');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { WebSocket, WebSocketServer } = require('ws');
+const { loadPacks } = require('./language-packs');
+const { createSpeechHandler } = require('./speech');
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8', '.mjs': 'text/javascript; charset=utf-8', '.json': 'application/json; charset=utf-8', '.svg': 'image/svg+xml' };
@@ -28,6 +30,7 @@ function validGaze(value) {
 function createApplication(options = {}) {
   const publicDir = options.publicDir || path.join(__dirname, 'public');
   const languagesDir = options.languagesDir || path.join(__dirname, 'languages');
+  const packs = loadPacks(languagesDir);
   const origins = new Set(options.origins || ['http://localhost:3000', 'http://127.0.0.1:3000',
     'http://localhost:8080', 'http://127.0.0.1:8080']);
   const hosts = new Set([...origins].map(origin => new URL(origin).host));
@@ -51,8 +54,6 @@ function createApplication(options = {}) {
       if (url.pathname === '/health') return json(res, 200, { status: 'ok', tracking: tracking.valid });
       if (url.pathname === '/config') return json(res, 200, { websocketPath: '/ws', language: options.language || 'en' });
       if (url.pathname === '/api/languages') {
-        const files = (await fs.readdir(languagesDir)).filter(file => /^[a-z]{2,3}(?:-[A-Za-z0-9]+)*\.json$/.test(file));
-        const packs = await Promise.all(files.map(async file => JSON.parse(await fs.readFile(path.join(languagesDir, file), 'utf8'))));
         return json(res, 200, packs.map(({ code, name, direction }) => ({ code, name, direction })));
       }
       const pathname = decodeURIComponent(url.pathname);
@@ -142,6 +143,7 @@ function start() {
     origins: process.env.ALLOWED_ORIGINS?.split(',').map(value => value.trim()),
     backendUrl: process.env.TRACKER_URL, backendToken: process.env.TRACKER_TOKEN,
     language: process.env.LANGUAGE || 'en',
+    handleRequest: createSpeechHandler({ endpoint: process.env.PIPER_URL, voices: JSON.parse(process.env.PIPER_VOICES || '{}') }),
   });
   app.server.listen(port, process.env.HOST || '127.0.0.1', () => console.log(`zekALS listening on port ${port}`));
   for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => { app.close().catch(() => { process.exitCode = 1; }); });
