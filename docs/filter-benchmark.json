@@ -1,0 +1,7 @@
+{
+  "platform": "Linux-7.1.5-76070105-generic-x86_64-with-glibc2.39",
+  "python": "3.12.3",
+  "iterations": 100000,
+  "python_microseconds_per_sample": 1.3567926397081465,
+  "rust_ffi_microseconds_per_sample": 1.447606550063938
+}

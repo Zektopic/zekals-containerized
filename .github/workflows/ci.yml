@@ -23,3 +23,14 @@ jobs:
         working-directory: za-frontend
       - run: docker compose config --quiet
       - run: docker build -t zekals-ui:test za-frontend
+  tracking:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: rustup toolchain install stable --profile minimal
+      - run: cargo fmt --check && cargo clippy -- -D warnings && cargo test && cargo build --release
+      - run: pip install -r za-backend/requirements.txt
+      - run: python -m unittest discover -s za-backend/tests -v

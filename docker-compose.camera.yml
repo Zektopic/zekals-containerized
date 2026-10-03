@@ -1,0 +1,26 @@
+# Linux camera access only. Model and token setup: docs/getting-started.md.
+services:
+  ui:
+    environment:
+      TRACKER_URL: ws://vision:8765
+      TRACKER_TOKEN: ${TRACKER_TOKEN:?Set a random TRACKER_TOKEN of at least 32 characters}
+  vision:
+    build: ./za-backend
+    environment:
+      TRACKER_HOST: 0.0.0.0
+      TRACKER_TOKEN: ${TRACKER_TOKEN:?Set TRACKER_TOKEN}
+      GAZE_MODEL: /models/face_landmarker.task
+      MODEL_SHA256: 64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff
+      PERFORMANCE_PROFILE: ${PERFORMANCE_PROFILE:-low}
+      HARDWARE_MODE: cpu
+    volumes: [./models:/models:ro]
+    devices: ["${CAMERA_DEVICE:-/dev/video0}:/dev/video0"]
+    group_add: ["${VIDEO_GID:-44}"]
+    init: true
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 96
+    mem_limit: 768m
+    tmpfs: [/tmp:size=32m,noexec,nosuid]
+    restart: unless-stopped

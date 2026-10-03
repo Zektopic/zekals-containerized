@@ -1,272 +1,181 @@
 #!/usr/bin/env python3
-"""
-Eye-Tracking Mouse Controller for ALS Communication System
-Inspired by Stephen Hawking's ACAT system
-
-This script uses MediaPipe to track eye movements from a webcam,
-controls the host's mouse cursor accordingly, and broadcasts the cursor's
-screen coordinates over WebSocket.
-"""
-
-import cv2
-import mediapipe as mp
-import pyautogui
-import numpy as np
+"""Bounded local gaze stream. Camera capture and inference never block asyncio."""
 import asyncio
-import websockets
+from dataclasses import dataclass
+import hmac
 import json
-import os
-import time
-from collections import deque
 import logging
+import os
+import signal
+import threading
+import time
+from http import HTTPStatus
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from filtering import GazeFilter
+from inference import MediaPipeInference, OnnxInference, verify_model
 
-class EyeTracker:
-    def __init__(self, hardware_mode="CPU"):
-        """Initialize the eye tracker with specified hardware mode."""
-        self.hardware_mode = hardware_mode.upper()
-        
-        # Initialize MediaPipe Face Mesh
-        self.mp_face_mesh = mp.solutions.face_mesh
-        self.mp_drawing = mp.solutions.drawing_utils
-        self.mp_drawing_styles = mp.solutions.drawing_styles
-        
-        # Configure Face Mesh based on hardware mode
-        if self.hardware_mode == "GPU":
-            logger.info("Initializing MediaPipe with GPU acceleration")
-            self.face_mesh = self.mp_face_mesh.FaceMesh(
-                max_num_faces=1,
-                refine_landmarks=True,
-                min_detection_confidence=0.5,
-                min_tracking_confidence=0.5
-            )
-        else:
-            logger.info("Initializing MediaPipe with CPU processing")
-            self.face_mesh = self.mp_face_mesh.FaceMesh(
-                max_num_faces=1,
-                refine_landmarks=True,
-                min_detection_confidence=0.5,
-                min_tracking_confidence=0.5,
-                static_image_mode=False
-            )
-        
-        # Initialize webcam
-        self.cap = cv2.VideoCapture(0)
-        if not self.cap.isOpened():
-            raise RuntimeError("Could not open webcam")
-        
-        # Set webcam resolution for better performance
-        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-        
-        # Get screen dimensions
-        self.screen_width, self.screen_height = pyautogui.size()
-        logger.info(f"Screen resolution: {self.screen_width}x{self.screen_height}")
-        
-        # Smoothing buffer for gaze coordinates
-        self.gaze_buffer = deque(maxlen=5)  # Moving average of last 5 positions
-        
-        # WebSocket clients
-        self.websocket_clients = set()
-        
-        # Eye landmark indices for MediaPipe Face Mesh
-        # These correspond to the corners of the eyes
-        self.LEFT_EYE_LANDMARKS = [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246]
-        self.RIGHT_EYE_LANDMARKS = [362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385, 384, 398]
-        
-        # Center points of eyes
-        self.LEFT_EYE_CENTER = 468
-        self.RIGHT_EYE_CENTER = 473
-        
-        # Calibration parameters (simple mapping)
-        self.calibration_offset_x = 0
-        self.calibration_offset_y = 0
-        self.sensitivity_x = 1.0
-        self.sensitivity_y = 1.0
-        
-    def get_gaze_point(self, landmarks, frame_width, frame_height):
-        """Calculate gaze point from facial landmarks."""
+LOG = logging.getLogger("zekals.tracker")
+PROFILES = {"low": (320, 240, 10), "balanced": (640, 480, 20), "high": (960, 720, 30)}
+
+
+@dataclass
+class Sample:
+    point: tuple | None = None
+    captured: float = 0.0
+    reason: str = "starting"
+
+
+class Pipeline:
+    def __init__(self, profile="low", camera=0, model="", checksum="", engine="mediapipe", mode="cpu", device="CPU"):
+        self.width, self.height, self.fps = PROFILES[profile]
+        self.camera, self.model, self.checksum = camera, model, checksum
+        self.engine, self.mode, self.device = engine, mode, device
+        self.stop = threading.Event()
+        self.lock = threading.Lock()
+        self.frame = None
+        self.sample = Sample()
+        self.active_provider = "unavailable"
+        self.threads = []
+
+    def start(self):
+        for target in (self.capture, self.infer):
+            thread = threading.Thread(target=target, daemon=True)
+            self.threads.append(thread)
+            thread.start()
+
+    def capture(self):
+        import cv2
+        cap = None
         try:
-            # Get eye landmarks
-            left_eye_points = []
-            right_eye_points = []
-            
-            for idx in self.LEFT_EYE_LANDMARKS:
-                if idx < len(landmarks.landmark):
-                    point = landmarks.landmark[idx]
-                    left_eye_points.append([point.x * frame_width, point.y * frame_height])
-            
-            for idx in self.RIGHT_EYE_LANDMARKS:
-                if idx < len(landmarks.landmark):
-                    point = landmarks.landmark[idx]
-                    right_eye_points.append([point.x * frame_width, point.y * frame_height])
-            
-            if not left_eye_points or not right_eye_points:
-                return None
-                
-            # Calculate center of each eye
-            left_eye_center = np.mean(left_eye_points, axis=0)
-            right_eye_center = np.mean(right_eye_points, axis=0)
-            
-            # Calculate average eye center
-            eye_center = (left_eye_center + right_eye_center) / 2
-            
-            # Simple mapping to screen coordinates
-            # This is a basic implementation - a proper system would need calibration
-            normalized_x = (eye_center[0] / frame_width)
-            normalized_y = (eye_center[1] / frame_height)
-            
-            # Apply sensitivity and offset
-            screen_x = int((normalized_x * self.sensitivity_x + self.calibration_offset_x) * self.screen_width)
-            screen_y = int((normalized_y * self.sensitivity_y + self.calibration_offset_y) * self.screen_height)
-            
-            # Clamp to screen bounds
-            screen_x = max(0, min(self.screen_width - 1, screen_x))
-            screen_y = max(0, min(self.screen_height - 1, screen_y))
-            
-            return screen_x, screen_y
-            
-        except Exception as e:
-            logger.error(f"Error calculating gaze point: {e}")
-            return None
-    
-    def smooth_gaze_point(self, gaze_point):
-        """Apply smoothing to reduce jitter."""
-        if gaze_point is None:
-            return None
-            
-        self.gaze_buffer.append(gaze_point)
-        
-        if len(self.gaze_buffer) == 0:
-            return None
-            
-        # Calculate moving average
-        avg_x = sum(point[0] for point in self.gaze_buffer) / len(self.gaze_buffer)
-        avg_y = sum(point[1] for point in self.gaze_buffer) / len(self.gaze_buffer)
-        
-        return int(avg_x), int(avg_y)
-    
-    async def register_websocket_client(self, websocket, path):
-        """Register a new WebSocket client."""
-        self.websocket_clients.add(websocket)
-        logger.info(f"WebSocket client connected from {websocket.remote_address}")
-        try:
-            await websocket.wait_closed()
+            while not self.stop.is_set():
+                if cap is None:
+                    cap = cv2.VideoCapture(self.camera)
+                    cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
+                    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
+                    cap.set(cv2.CAP_PROP_FPS, self.fps)
+                    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+                ok, frame = cap.read()
+                if not ok:
+                    with self.lock:
+                        self.frame = None
+                        self.sample = Sample(reason="camera_unavailable")
+                    cap.release()
+                    cap = None
+                    self.stop.wait(2)  # Avoid a missing-camera busy loop.
+                    continue
+                with self.lock:
+                    self.frame = (frame, time.monotonic())  # Replace, never queue frames.
+        except Exception:
+            LOG.exception("Camera capture failed")
         finally:
-            self.websocket_clients.remove(websocket)
-            logger.info(f"WebSocket client disconnected from {websocket.remote_address}")
-    
-    async def broadcast_coordinates(self, x, y):
-        """Broadcast cursor coordinates to all connected WebSocket clients."""
-        if self.websocket_clients:
-            message = json.dumps({"x": x, "y": y, "timestamp": time.time()})
-            
-            # Remove disconnected clients
-            disconnected_clients = set()
-            for client in self.websocket_clients:
-                try:
-                    await client.send(message)
-                except websockets.exceptions.ConnectionClosed:
-                    disconnected_clients.add(client)
-            
-            # Clean up disconnected clients
-            self.websocket_clients -= disconnected_clients
-    
-    async def run_eye_tracking(self):
-        """Main eye tracking loop."""
-        logger.info("Starting eye tracking loop...")
-        
-        while True:
-            ret, frame = self.cap.read()
-            if not ret:
-                logger.error("Failed to read from webcam")
-                continue
-            
-            # Flip frame horizontally for mirror effect
-            frame = cv2.flip(frame, 1)
-            frame_height, frame_width = frame.shape[:2]
-            
-            # Convert BGR to RGB for MediaPipe
-            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            
-            # Process the frame
-            results = self.face_mesh.process(rgb_frame)
-            
-            if results.multi_face_landmarks:
-                for face_landmarks in results.multi_face_landmarks:
-                    # Calculate gaze point
-                    gaze_point = self.get_gaze_point(face_landmarks, frame_width, frame_height)
-                    
-                    if gaze_point:
-                        # Apply smoothing
-                        smoothed_point = self.smooth_gaze_point(gaze_point)
-                        
-                        if smoothed_point:
-                            x, y = smoothed_point
-                            
-                            # Move system mouse cursor
-                            try:
-                                pyautogui.moveTo(x, y, duration=0)
-                                
-                                # Broadcast coordinates via WebSocket
-                                await self.broadcast_coordinates(x, y)
-                                
-                            except pyautogui.FailSafeException:
-                                logger.warning("PyAutoGUI fail-safe triggered")
-                            except Exception as e:
-                                logger.error(f"Error moving mouse: {e}")
-            
-            # Small delay to prevent overwhelming the system
-            await asyncio.sleep(0.033)  # ~30 FPS
-    
-    async def start_websocket_server(self):
-        """Start the WebSocket server."""
-        logger.info("Starting WebSocket server on port 8765...")
-        server = await websockets.serve(self.register_websocket_client, "0.0.0.0", 8765)
-        logger.info("WebSocket server started successfully")
-        return server
-    
-    async def run(self):
-        """Run the complete eye tracking system."""
+            if cap is not None:
+                cap.release()
+
+    def infer(self):
+        model = None
         try:
-            # Disable pyautogui fail-safe for smoother operation
-            pyautogui.FAILSAFE = False
-            
-            # Start WebSocket server
-            websocket_server = await self.start_websocket_server()
-            
-            # Start eye tracking
-            await self.run_eye_tracking()
-            
-        except KeyboardInterrupt:
-            logger.info("Shutting down...")
-        except Exception as e:
-            logger.error(f"Unexpected error: {e}")
+            import cv2
+            verify_model(self.model, self.checksum)
+            model = (OnnxInference(self.model, self.mode, self.device) if self.engine == "onnx"
+                     else MediaPipeInference(self.model, self.mode))
+            self.active_provider = model.active_provider
+            smoother = GazeFilter()
+            LOG.info("Provider=%s filter=%s", self.active_provider, "rust" if smoother.library else "python")
+            last = 0.0
+            while not self.stop.is_set():
+                started = time.monotonic()
+                with self.lock:
+                    frame = self.frame
+                if frame is None or frame[1] == last or started - frame[1] > 0.5:
+                    self.stop.wait(0.02)
+                    continue
+                image, last = frame
+                rgb = cv2.cvtColor(cv2.flip(image, 1), cv2.COLOR_BGR2RGB)
+                point = model.predict(rgb, last * 1000)
+                smooth = smoother.step(*(point or (0, 0)), last * 1000, valid=point is not None)
+                with self.lock:
+                    self.sample = Sample(smooth, last, "tracking" if smooth else "face_lost")
+                self.active_provider = model.active_provider
+                self.stop.wait(max(0, 1 / self.fps - (time.monotonic() - started)))
+        except Exception:
+            LOG.exception("Tracking unavailable; pointer, touch and switch access remain available")
+            with self.lock:
+                self.sample = Sample(reason="model_unavailable")
         finally:
-            # Cleanup
-            if hasattr(self, 'cap'):
-                self.cap.release()
-            cv2.destroyAllWindows()
+            if model is not None:
+                model.close()
+
+    def message(self, now=None):
+        with self.lock:
+            sample = self.sample
+        now = time.monotonic() if now is None else now
+        valid = sample.point is not None and 0 <= now - sample.captured <= 0.5
+        return {"type": "gaze", "valid": valid, "x": sample.point[0] if valid else None,
+                "y": sample.point[1] if valid else None,
+                "reason": sample.reason if not sample.point or valid else "stale",
+                "provider": self.active_provider}
+
+    def close(self):
+        self.stop.set()
+        for thread in self.threads:
+            thread.join(timeout=2)
+
+
+async def serve_pipeline(pipeline, host="127.0.0.1", port=8765, token="", stop_event=None):
+    from websockets.asyncio.server import serve
+    if host not in ("127.0.0.1", "::1", "localhost") and len(token) < 32:
+        raise ValueError("A remote tracker requires a TRACKER_TOKEN of at least 32 characters")
+
+    def authorize(connection, request):
+        if token and not hmac.compare_digest(request.headers.get("Authorization", ""), f"Bearer {token}"):
+            return connection.respond(HTTPStatus.UNAUTHORIZED, "Unauthorized\n")
+        return None
+
+    clients = set()
+
+    async def client(websocket):
+        if len(clients) >= 4:
+            await websocket.close(1013, "Too many connections")
+            return
+        clients.add(websocket)
+        try:
+            while True:
+                # One slow reader can only delay its own stream, not capture or other clients.
+                async with asyncio.timeout(1):
+                    await websocket.send(json.dumps(pipeline.message(), allow_nan=False))
+                await asyncio.sleep(1 / pipeline.fps)
+        except Exception as error:
+            LOG.debug("Tracker client closed: %s", type(error).__name__)
+        finally:
+            clients.discard(websocket)
+
+    async with serve(client, host, port, origins=[None], process_request=authorize,
+                     max_size=1024, max_queue=1, write_limit=4096, compression=None,
+                     ping_interval=20, ping_timeout=10) as server:
+        LOG.info("Tracker listening on %s:%s", host, server.sockets[0].getsockname()[1])
+        await (stop_event or asyncio.Event()).wait()
+
 
 async def main():
-    """Main entry point."""
-    # Read hardware mode from environment variable
-    hardware_mode = os.getenv("HARDWARE_MODE", "CPU")
-    
-    logger.info(f"Starting ALS Communication System - Vision Backend")
-    logger.info(f"Hardware mode: {hardware_mode}")
-    
+    logging.basicConfig(level=logging.INFO)
+    pipeline = Pipeline(profile=os.getenv("PERFORMANCE_PROFILE", "low"), camera=int(os.getenv("CAMERA_INDEX", "0")),
+                        model=os.getenv("GAZE_MODEL", "models/face_landmarker.task"), checksum=os.getenv("MODEL_SHA256", ""),
+                        engine=os.getenv("INFERENCE_ENGINE", "mediapipe"), mode=os.getenv("HARDWARE_MODE", "cpu").lower(),
+                        device=os.getenv("OPENVINO_DEVICE", "CPU"))
+    stopped = asyncio.Event()
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        try:
+            loop.add_signal_handler(sig, stopped.set)
+        except NotImplementedError:  # Windows asyncio loop
+            pass
+    pipeline.start()
     try:
-        tracker = EyeTracker(hardware_mode=hardware_mode)
-        await tracker.run()
-    except Exception as e:
-        logger.error(f"Failed to start eye tracker: {e}")
-        return 1
-    
-    return 0
+        await serve_pipeline(pipeline, os.getenv("TRACKER_HOST", "127.0.0.1"), int(os.getenv("WEBSOCKET_PORT", "8765")),
+                             os.getenv("TRACKER_TOKEN", ""), stopped)
+    finally:
+        pipeline.close()
+
 
 if __name__ == "__main__":
-    exit(asyncio.run(main()))
+    asyncio.run(main())

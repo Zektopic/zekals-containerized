@@ -1,40 +1,10 @@
-# Use Python 3.10 slim image
-FROM python:3.10-slim
-
-# Install system dependencies for OpenCV and webcam access
-RUN apt-get update && apt-get install -y \
-    libglib2.0-0 \
-    libsm6 \
-    libxext6 \
-    libxrender-dev \
-    libgomp1 \
-    libgtk-3-0 \
-    libgl1 \
-    libgstreamer1.0-0 \
-    python3-tk \
-    python3-dev \
-    libx11-dev \
-    libxss1 \
-    && rm -rf /var/lib/apt/lists/*
-
-# Set working directory
+FROM python:3.12-slim
+RUN apt-get update && apt-get install -y --no-install-recommends libgl1 libglib2.0-0 && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
-
-# Copy requirements first for better caching
-COPY requirements.txt .
-
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Copy the application code
-COPY . .
-
-# Set environment variables
+COPY requirements*.txt ./
+RUN pip install --no-cache-dir -r requirements-camera.txt && useradd --uid 10001 --create-home tracker
+COPY *.py ./
+USER tracker
 ENV PYTHONUNBUFFERED=1
-ENV DISPLAY=:0
-
-# Expose WebSocket port
 EXPOSE 8765
-
-# Run the eye tracker
 CMD ["python", "eye_tracker.py"]
