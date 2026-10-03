@@ -24,6 +24,9 @@ function resetDwell() {
   if (highlighted) { highlighted.classList.remove('dwell-target'); highlighted.style.removeProperty('--dwell-progress'); }
   highlighted = null; dwell.reset();
 }
+function resetScan() {
+  scanned?.classList.remove('scan-target'); scanned = null; scanIndex = -1; lastScan = 0;
+}
 function record(value) {
   if (value === lastValue) return;
   history.push(lastValue); if (history.length > 30) history.shift();
@@ -41,7 +44,7 @@ function makeButton(label, action) {
   button.addEventListener('click', action); return button;
 }
 function renderPack() {
-  resetDwell(); document.documentElement.lang = pack.locale || pack.code;
+  resetDwell(); resetScan(); document.documentElement.lang = pack.locale || pack.code;
   document.documentElement.dir = pack.direction || 'ltr';
   $('language-label').textContent = pack.name; $('language-next').textContent = `${pack.name} ›`;
   document.querySelectorAll('[data-i18n]').forEach(element => {
@@ -105,7 +108,7 @@ function setPaused(value) {
   notices(paused ? tr('paused', 'Automatic selection paused. Touch and keyboard still work.') : tr('ready', 'Ready when you are.'));
 }
 function setMode(value) {
-  mode = value; pointerTarget = gazeTarget = null; resetDwell(); lastScan = 0;
+  mode = value; pointerTarget = gazeTarget = null; resetDwell(); resetScan();
   document.querySelectorAll('[data-mode]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.mode === mode)));
   $('mode-hint').textContent = ({ manual: tr('manualHint', 'Use a mouse, touch, or keyboard. Change access mode in Settings.'),
     dwell: tr('dwellHint', 'Hold the pointer over a button to choose it. Move away before choosing again.'),
@@ -132,9 +135,9 @@ $('language-next').onclick = () => {
   if (catalog.length) loadLanguage(catalog[(index + 1) % catalog.length].code);
 };
 $('pause').onclick = () => setPaused(!paused);
-$('settings-open').onclick = () => { resetDwell(); $('settings').showModal(); };
-$('settings-close').onclick = () => { resetDwell(); $('settings').close(); };
-$('settings').addEventListener('close', resetDwell);
+$('settings-open').onclick = () => { resetDwell(); resetScan(); $('settings').showModal(); };
+$('settings-close').onclick = () => { resetDwell(); resetScan(); $('settings').close(); };
+$('settings').addEventListener('close', () => { resetDwell(); resetScan(); });
 $('settings').addEventListener('cancel', () => setPaused(true));
 for (const button of document.querySelectorAll('[data-mode]')) button.onclick = () => setMode(button.dataset.mode);
 for (const [id, key, delta, min, max] of [['dwell-less','dwell',-100,500,3000],['dwell-more','dwell',100,500,3000],
@@ -153,7 +156,7 @@ document.addEventListener('keydown', event => {
   if (event.key === 'Escape') { setPaused(true); stopSpeaking(); }
   if (mode === 'scan' && event.code === 'Space') {
     event.preventDefault();
-    if (!event.repeat && !paused && scanned?.isConnected) { scanned.click(); lastScan = performance.now(); }
+    if (!event.repeat && !paused && !document.hidden && !calibrationRun && allButtons().includes(scanned)) { scanned.click(); lastScan = performance.now(); }
     else if (!event.repeat && paused) setPaused(false);
   }
 });

@@ -31,6 +31,20 @@ test('switch scan selects buttons and Escape pauses', async ({ page }) => {
   await page.keyboard.press('Escape'); await expect(page.locator('#pause')).toHaveAttribute('aria-pressed', 'true');
   await page.keyboard.press('Space'); await expect(page.locator('#pause')).toHaveAttribute('aria-pressed', 'false');
 });
+test('opening Settings prevents switch activation of the previous scan target', async ({ page }) => {
+  await page.locator('#message').fill('Keep this message');
+  await page.locator('#settings-open').click(); await page.locator('[data-mode=scan]').click();
+  await page.locator('#settings-close').click();
+  await expect(page.locator('#clear')).toHaveClass(/scan-target/, { timeout: 15000 });
+  // A second switch press can arrive before the next scan timer runs.
+  await page.evaluate(() => {
+    document.getElementById('settings-open').click();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', code: 'Space', bubbles: true }));
+  });
+  await expect(page.locator('#message')).toHaveValue('Keep this message');
+  await expect(page.locator('#settings .scan-target')).toHaveCount(1);
+  await expect(page.locator('.scan-target')).toHaveCount(1);
+});
 test('WCAG automated checks and mobile layout', async ({ page }) => {
   const result = await new AxeBuilder({ page }).withTags(['wcag2a','wcag2aa','wcag21aa','wcag22aa']).analyze();
   expect(result.violations).toEqual([]);

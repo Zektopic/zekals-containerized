@@ -6,7 +6,7 @@ available Linux x86_64 development host from hardware or user testing.
 | Check | Result |
 | --- | --- |
 | Production Node server and logic tests | 11 passing: HTTP, origin/path restrictions, WebSockets, dwell, Unicode, calibration, speech and language validation |
-| Chromium interaction/accessibility tests | 11 passing, including calibration/loss cancellation, Sinhala key labels and IME composition/undo |
+| Chromium interaction/accessibility tests | 12 passing, including calibration/loss cancellation, Sinhala key labels, IME composition/undo and switch isolation inside Settings |
 | Python tracker tests | 7 passing, including the real WebSocket stream and corrupted-state recovery |
 | Rust | 4 unit tests passing; formatting and Clippy clean; release library built |
 | Real camera model | Pinned MediaPipe model initialized on CPU; blank image produced no gaze |

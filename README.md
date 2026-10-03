@@ -66,8 +66,8 @@ with its own C++/JNI input processing, offline speech and documentation.
 
 ## Project status
 
-This modernization is submitted as a stack of focused pull requests. It is an
-engineering foundation requiring real-user and physical-device validation;
+This modernization provides an engineering foundation requiring real-user and
+physical-device validation;
 webcam tracking is experimental. Automated accessibility checks do not establish
 complete accessibility conformance. GPU/NPU compatibility is conditional, and
 performance on every device is not guaranteed. The measured Rust FFI filter did
