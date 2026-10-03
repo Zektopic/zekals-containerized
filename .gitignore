@@ -67,8 +67,6 @@ wheels/
 MANIFEST
 venv/
 
-# Docker
-.dockerignore
 
 # IDE
 .vscode/
@@ -89,3 +87,9 @@ Thumbs.db
 # Temporary files
 tmp/
 temp/
+.venv/
+target/
+models/
+playwright-report/
+test-results/
+*.wav

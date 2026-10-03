@@ -1,52 +1,19 @@
 services:
-  vision:
-    image: zekals-containers_za-backend:latest
-    build:
-      context: ./za-backend
-      dockerfile: Dockerfile
-    container_name: als-vision-backend
-    environment:
-      - HARDWARE_MODE=${HARDWARE_MODE:-CPU}
-      - PYTHONUNBUFFERED=1
-    # devices:
-    #   # Webcam access (Linux-specific). On Windows/macOS, Docker Desktop handles webcam access.
-    #   - /dev/video0:/dev/video0
-    volumes:
-      # - /tmp/.X11-unix:/tmp/.X11-unix:rw  # X11 socket for GUI (Linux-specific)
-      - /dev/shm:/dev/shm  # Shared memory for better performance
-    networks:
-      - als-network
-    ports:
-      - "8765:8765"  # WebSocket port
-    restart: unless-stopped
-    privileged: true  # Required for mouse control
-    stdin_open: true
-    tty: true
-
   ui:
-    image: zekals-containers_za-frontend:latest
-    build:
-      context: ./za-frontend
-      dockerfile: Dockerfile
-    container_name: als-ui-frontend
-    environment:
-      - NODE_ENV=production
-      - PORT=3000
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
-      - LOCATION=${LOCATION:-Unknown Location}
+    build: ./za-frontend
     ports:
-      - "8080:3000"  # Web server port
-      - "8081:8080"  # WebSocket port for UI clients
-    networks:
-      - als-network
-    depends_on:
-      - vision
+      - "127.0.0.1:${FRONTEND_PORT:-8080}:3000"
+    environment:
+      HOST: 0.0.0.0
+      TRACKER_URL: ${TRACKER_URL:-}
+      TRACKER_TOKEN: ${TRACKER_TOKEN:-}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:8080,http://127.0.0.1:8080,http://localhost:3000}
+      LANGUAGE: ${LANGUAGE:-en}
+    init: true
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 64
+    mem_limit: 192m
+    tmpfs: [/tmp:size=16m,noexec,nosuid]
     restart: unless-stopped
-
-networks:
-  als-network:
-    driver: bridge
-
-volumes:
-  als-data:
-    driver: local

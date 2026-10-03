@@ -1,219 +1,151 @@
-const express = require('express');
-const WebSocket = require('ws');
-const cors = require('cors');
-const path = require('path');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
-require('dotenv').config();
+'use strict';
 
-const app = express();
-const PORT = process.env.PORT || 3000;
+const http = require('node:http');
+const fs = require('node:fs/promises');
+const path = require('node:path');
+const { WebSocket, WebSocketServer } = require('ws');
 
-// Initialize Gemini AI
-let genAI = null;
-if (process.env.GEMINI_API_KEY) {
-    genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const MIME = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8', '.json': 'application/json; charset=utf-8', '.svg': 'image/svg+xml' };
+const HEADERS = {
+  'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; media-src 'self' blob:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
+  'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer',
+  'Permissions-Policy': 'camera=(), microphone=(), geolocation=()', 'Cache-Control': 'no-store',
+};
+
+function json(res, status, value) {
+  res.writeHead(status, { ...HEADERS, 'Content-Type': MIME['.json'] });
+  res.end(JSON.stringify(value));
 }
 
-// Middleware
-app.use(cors());
-app.use(express.json());
-app.use(express.static(path.join(__dirname, 'public')));
+function validGaze(value) {
+  return value && value.type === 'gaze' && typeof value.valid === 'boolean' &&
+    (!value.valid || (Number.isFinite(value.x) && Number.isFinite(value.y) &&
+      value.x >= 0 && value.x <= 1 && value.y >= 0 && value.y <= 1));
+}
 
-// Serve language files
-app.use('/languages', express.static(path.join(__dirname, 'languages')));
+/** One HTTP/WebSocket origin; no text, camera frames or API keys leave this service. */
+function createApplication(options = {}) {
+  const publicDir = options.publicDir || path.join(__dirname, 'public');
+  const languagesDir = options.languagesDir || path.join(__dirname, 'languages');
+  const origins = new Set(options.origins || ['http://localhost:3000', 'http://127.0.0.1:3000',
+    'http://localhost:8080', 'http://127.0.0.1:8080']);
+  const hosts = new Set([...origins].map(origin => new URL(origin).host));
+  let closed = false, backend = null, reconnect = null, attempts = 0;
+  const wss = new WebSocketServer({ noServer: true, maxPayload: 4096, perMessageDeflate: false });
+  const send = (client, data) => {
+    if (client.readyState === WebSocket.OPEN && client.bufferedAmount < 16384) client.send(JSON.stringify(data));
+  };
+  const broadcast = data => { for (const client of wss.clients) send(client, data); };
+  let tracking = { type: 'gaze', valid: false, reason: 'disconnected' };
 
-// WebSocket server for communication with clients
-const wss = new WebSocket.Server({ port: 8080 });
-
-// Store connected clients
-const clients = new Set();
-
-// Handle WebSocket connections from the UI
-wss.on('connection', (ws) => {
-    console.log('UI client connected');
-    clients.add(ws);
-
-    ws.on('message', async (message) => {
-        try {
-            const data = JSON.parse(message);
-            
-            if (data.type === 'text_updated') {
-                // Generate suggestions when text is updated
-                const suggestions = await generateSuggestions(data.text);
-                
-                // Broadcast suggestions to all clients
-                const response = JSON.stringify({
-                    type: 'suggestions',
-                    suggestions: suggestions
-                });
-                
-                clients.forEach(client => {
-                    if (client.readyState === WebSocket.OPEN) {
-                        client.send(response);
-                    }
-                });
-            }
-        } catch (error) {
-            console.error('Error handling message:', error);
-        }
-    });
-
-    ws.on('close', () => {
-        console.log('UI client disconnected');
-        clients.delete(ws);
-    });
-
-    ws.on('error', (error) => {
-        console.error('WebSocket error:', error);
-        clients.delete(ws);
-    });
-});
-
-// Connect to Python backend's WebSocket server
-let backendConnection = null;
-
-function connectToBackend() {
+  const server = http.createServer(async (req, res) => {
     try {
-        backendConnection = new WebSocket('ws://vision:8765');
-        
-        backendConnection.on('open', () => {
-            console.log('Connected to Python backend');
-        });
-
-        backendConnection.on('message', (message) => {
-            // Forward cursor coordinates to UI clients
-            clients.forEach(client => {
-                if (client.readyState === WebSocket.OPEN) {
-                    const data = JSON.parse(message);
-                    client.send(JSON.stringify({
-                        type: 'cursor_position',
-                        x: data.x,
-                        y: data.y,
-                        timestamp: data.timestamp
-                    }));
-                }
-            });
-        });
-
-        backendConnection.on('close', () => {
-            console.log('Disconnected from Python backend, attempting to reconnect...');
-            setTimeout(connectToBackend, 5000); // Retry after 5 seconds
-        });
-
-        backendConnection.on('error', (error) => {
-            console.error('Backend connection error:', error.message);
-            setTimeout(connectToBackend, 5000); // Retry after 5 seconds
-        });
-        
+      // Reject DNS rebinding and browser requests from other origins. Remote access is explicit.
+      if (!hosts.has(req.headers.host) || (req.headers.origin && !origins.has(req.headers.origin))) {
+        req.resume(); return json(res, 403, { error: 'Origin or host not allowed' });
+      }
+      const url = new URL(req.url, 'http://localhost');
+      if (options.handleRequest && await options.handleRequest(req, res, url, json)) return;
+      if (!['GET', 'HEAD'].includes(req.method)) { req.resume(); return json(res, 405, { error: 'Method not allowed' }); }
+      if (url.pathname === '/health') return json(res, 200, { status: 'ok', tracking: tracking.valid });
+      if (url.pathname === '/config') return json(res, 200, { websocketPath: '/ws', language: options.language || 'en' });
+      if (url.pathname === '/api/languages') {
+        const files = (await fs.readdir(languagesDir)).filter(file => /^[a-z]{2,3}(?:-[A-Za-z0-9]+)*\.json$/.test(file));
+        const packs = await Promise.all(files.map(async file => JSON.parse(await fs.readFile(path.join(languagesDir, file), 'utf8'))));
+        return json(res, 200, packs.map(({ code, name, direction }) => ({ code, name, direction })));
+      }
+      const pathname = decodeURIComponent(url.pathname);
+      const language = pathname.startsWith('/languages/');
+      const root = language ? languagesDir : publicDir;
+      const relative = language ? pathname.slice('/languages/'.length) : pathname === '/' ? 'index.html' : pathname.slice(1);
+      const file = path.resolve(root, relative);
+      if (!file.startsWith(path.resolve(root) + path.sep) || relative.split(/[\\/]/).some(part => part.startsWith('.'))) {
+        return json(res, 404, { error: 'Not found' });
+      }
+      if (!MIME[path.extname(file)]) return json(res, 404, { error: 'Not found' });
+      const content = await fs.readFile(file);
+      res.writeHead(200, { ...HEADERS, 'Content-Type': MIME[path.extname(file)], 'Content-Length': content.length });
+      res.end(req.method === 'HEAD' ? undefined : content);
     } catch (error) {
-        console.error('Failed to connect to backend:', error);
-        setTimeout(connectToBackend, 5000); // Retry after 5 seconds
+      if (!res.headersSent) json(res, error.code === 'ENOENT' || error.code === 'EISDIR' ? 404 : 400, { error: 'Request could not be served' });
+      else res.end();
     }
-}
-
-async function generateSuggestions(currentText) {
-    if (!genAI) {
-        // Return default suggestions if no API key
-        return getDefaultSuggestions();
+  });
+  server.requestTimeout = 15000;
+  server.headersTimeout = 10000;
+  server.maxHeadersCount = 40;
+  server.on('upgrade', (req, socket, head) => {
+    if (closed || req.url !== '/ws' || !origins.has(req.headers.origin) || !hosts.has(req.headers.host) || wss.clients.size >= 8) {
+      socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n'); return;
     }
+    wss.handleUpgrade(req, socket, head, client => wss.emit('connection', client));
+  });
+  wss.on('connection', client => {
+    client.on('error', () => {});
+    client.alive = true;
+    client.on('pong', () => { client.alive = true; });
+    // The stream is read-only. Suggestions are computed locally in each browser.
+    client.on('message', () => client.close(1008, 'Read-only stream'));
+    send(client, tracking);
+  });
+  const heartbeat = setInterval(() => {
+    for (const client of wss.clients) {
+      if (!client.alive) client.terminate();
+      else { client.alive = false; client.ping(); }
+    }
+  }, 30000);
+  heartbeat.unref();
 
-    try {
-        const model = genAI.getGenerativeModel({ model: "gemini-pro" });
-        
-        const currentTime = new Date();
-        const timeOfDay = getTimeOfDay(currentTime);
-        const location = process.env.LOCATION || "your location";
-        
-        const prompt = `
-Context: You are helping someone with ALS communicate faster through text suggestions.
-Current text: "${currentText}"
-Time: ${currentTime.toLocaleString()}
-Time of day: ${timeOfDay}
-Location: ${location}
-
-Please provide 6 helpful text suggestions in JSON format:
-1. A relevant completion or continuation of their current text
-2. A time-appropriate greeting (good morning/afternoon/evening)
-3. A common phrase that might be useful in conversation
-4. A simple yes/no or acknowledgment phrase
-5. A brief weather-related comment for ${location}
-6. A current news headline or topic (make it general and positive)
-
-Format as JSON array with just the text strings, no explanations:
-["suggestion1", "suggestion2", "suggestion3", "suggestion4", "suggestion5", "suggestion6"]
-
-Keep suggestions short (under 50 characters each) and conversational.
-`;
-
-        const result = await model.generateContent(prompt);
-        const response = await result.response;
-        const text = response.text();
-        
-        // Try to parse JSON response
-        try {
-            const suggestions = JSON.parse(text);
-            if (Array.isArray(suggestions)) {
-                return suggestions;
-            }
-        } catch (parseError) {
-            console.error('Failed to parse AI suggestions:', parseError);
+  function connect() {
+    if (closed || !options.backendUrl) return;
+    backend = new WebSocket(options.backendUrl, { maxPayload: 4096, handshakeTimeout: 5000,
+      headers: options.backendToken ? { Authorization: `Bearer ${options.backendToken}` } : {} });
+    backend.on('open', () => { attempts = 0; });
+    backend.on('message', message => {
+      try {
+        const data = JSON.parse(message.toString());
+        if (validGaze(data)) {
+          tracking = { type: 'gaze', valid: data.valid, x: data.x, y: data.y,
+            reason: String(data.reason || '').slice(0, 80), timestamp: Date.now() };
+          broadcast(tracking);
         }
-        
-        // Fallback to default suggestions
-        return getDefaultSuggestions();
-        
-    } catch (error) {
-        console.error('Error generating AI suggestions:', error);
-        return getDefaultSuggestions();
-    }
+      } catch { /* Invalid backend data cannot break the server. */ }
+    });
+    backend.on('error', () => {}); // close is the only reconnect path
+    backend.on('close', () => {
+      tracking = { type: 'gaze', valid: false, reason: 'disconnected' };
+      broadcast(tracking);
+      if (!closed) {
+        reconnect = setTimeout(connect, Math.min(30000, 500 * 2 ** Math.min(attempts++, 6)));
+        reconnect.unref();
+      }
+    });
+  }
+  server.on('listening', connect);
+  return {
+    server,
+    async close() {
+      closed = true;
+      clearTimeout(reconnect); clearInterval(heartbeat);
+      if (backend) backend.terminate();
+      for (const client of wss.clients) client.terminate();
+      wss.close();
+      await new Promise(resolve => server.close(resolve));
+    },
+  };
 }
 
-function getDefaultSuggestions() {
-    const currentTime = new Date();
-    const hour = currentTime.getHours();
-    
-    let greeting;
-    if (hour < 12) greeting = "Good morning";
-    else if (hour < 17) greeting = "Good afternoon";
-    else greeting = "Good evening";
-    
-    return [
-        "How are you?",
-        greeting,
-        "Thank you",
-        "Yes, please",
-        "It's a beautiful day",
-        "Have a great day!"
-    ];
+function start() {
+  const port = Number(process.env.PORT || 3000);
+  const app = createApplication({
+    origins: process.env.ALLOWED_ORIGINS?.split(',').map(value => value.trim()),
+    backendUrl: process.env.TRACKER_URL, backendToken: process.env.TRACKER_TOKEN,
+    language: process.env.LANGUAGE || 'en',
+  });
+  app.server.listen(port, process.env.HOST || '127.0.0.1', () => console.log(`zekALS listening on port ${port}`));
+  for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => { app.close().catch(() => { process.exitCode = 1; }); });
+  return app;
 }
-
-function getTimeOfDay(date) {
-    const hour = date.getHours();
-    if (hour < 6) return "early morning";
-    if (hour < 12) return "morning";
-    if (hour < 17) return "afternoon";
-    if (hour < 21) return "evening";
-    return "night";
-}
-
-// Start the Express server
-app.listen(PORT, () => {
-    console.log(`ALS Communication UI server running on port ${PORT}`);
-    console.log(`Access the application at: http://localhost:${PORT}`);
-    
-    // Connect to Python backend
-    setTimeout(connectToBackend, 2000); // Give some time for services to start
-});
-
-// Graceful shutdown
-process.on('SIGTERM', () => {
-    console.log('Received SIGTERM, shutting down gracefully');
-    wss.close();
-    process.exit(0);
-});
-
-process.on('SIGINT', () => {
-    console.log('Received SIGINT, shutting down gracefully');
-    wss.close();
-    process.exit(0);
-});
+if (require.main === module) start();
+module.exports = { createApplication, validGaze, start };
