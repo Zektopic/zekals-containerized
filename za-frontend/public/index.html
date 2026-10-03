@@ -1,76 +1,55 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ALS Communication System</title>
-    <link rel="stylesheet" href="style.css">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0c1724">
+  <title>zekALS · Your words, your pace</title>
+  <link rel="stylesheet" href="/style.css">
+  <script type="module" src="/script.js"></script>
 </head>
 <body>
-    <div id="app">
-        <!-- Header -->
-        <header class="header">
-            <h1 id="app-title">ALS Communication System</h1>
-            <div class="header-controls">
-                <div class="connection-status" id="connection-status">
-                    <span class="status-indicator" id="status-indicator"></span>
-                    <span class="status-text" id="status-text">Connecting...</span>
-                </div>
-                <button id="language-toggle" class="language-toggle">EN</button>
-            </div>
-        </header>
-
-        <!-- Main Content -->
-        <main class="main-content">
-            <!-- Text Display Area -->
-            <section class="text-area-section">
-                <textarea 
-                    id="text-area" 
-                    class="text-area" 
-                    placeholder="Start typing with your eyes..."
-                    readonly
-                ></textarea>
-                <div class="text-actions">
-                    <button id="speak-button" class="action-button speak-button" title="Speak text">🔊</button>
-                    <button id="clear-all-button" class="action-button clear-button" title="Clear all text">🗑️</button>
-                </div>
-            </section>
-
-            <!-- Suggestions Bar -->
-            <section class="suggestions-section">
-                <h3 id="suggestions-title" class="suggestions-title">Suggestions</h3>
-                <div id="suggestions-container" class="suggestions-container">
-                    <!-- Suggestions will be dynamically inserted here -->
-                </div>
-            </section>
-
-            <!-- Virtual Keyboard -->
-            <section class="keyboard-section">
-                <div id="virtual-keyboard" class="virtual-keyboard">
-                    <!-- Keyboard will be dynamically generated -->
-                </div>
-            </section>
-        </main>
-
-        <!-- Cursor Indicator -->
-        <div id="cursor-indicator" class="cursor-indicator"></div>
-
-        <!-- Dwell Progress Ring -->
-        <div id="dwell-progress" class="dwell-progress hidden">
-            <svg class="dwell-ring" viewBox="0 0 60 60">
-                <circle class="dwell-ring-background" cx="30" cy="30" r="25"></circle>
-                <circle class="dwell-ring-progress" cx="30" cy="30" r="25"></circle>
-            </svg>
-        </div>
-
-        <!-- Loading Overlay -->
-        <div id="loading-overlay" class="loading-overlay">
-            <div class="spinner"></div>
-            <p id="loading-text">Connecting to eye tracker...</p>
-        </div>
-    </div>
-
-    <script src="script.js"></script>
+  <a class="skip-link" href="#message">Skip to your message</a>
+  <div class="shell">
+    <header>
+      <div class="brand"><span class="brand-mark" aria-hidden="true">z</span><div><strong>zekALS</strong><p data-i18n="tagline">Your words, your pace.</p></div></div>
+      <div class="header-actions"><span id="tracking-status" class="status">Pointer ready</span><button id="settings-open" data-i18n="settings">Settings</button><button id="pause" aria-pressed="false" data-i18n="pause">Pause selection</button></div>
+    </header>
+    <main>
+      <section class="composer panel" aria-labelledby="message-label">
+        <div class="section-heading"><h1 id="message-label" data-i18n="messageTitle">What would you like to say?</h1><span id="language-label">English</span></div>
+        <label class="sr-only" for="message" data-i18n="messageLabel">Your message</label>
+        <textarea id="message" rows="3" maxlength="2000" placeholder="Type here, choose a phrase, or use the keyboard below." spellcheck="true" dir="auto"></textarea>
+        <div class="message-tools"><p id="message-hint" data-i18n="messageHint">Your message stays on this device.</p><span id="character-count">0 / 2000</span></div>
+        <div class="action-row"><button class="primary" id="speak" data-i18n="speak">Speak message</button><button id="stop" data-i18n="stop">Stop speaking</button><button id="undo" data-i18n="undo">Undo</button><button id="clear" data-i18n="clear">Clear message</button></div>
+      </section>
+      <section class="phrases-section" aria-labelledby="phrases-title">
+        <div class="section-heading"><h2 id="phrases-title" data-i18n="phrases">Everyday phrases</h2><p data-i18n="phraseHint">Choose a phrase, then speak.</p></div>
+        <div id="phrases" class="phrase-grid"></div>
+      </section>
+      <section class="keyboard-section panel" aria-labelledby="keyboard-title">
+        <div class="section-heading"><h2 id="keyboard-title" data-i18n="keyboard">Make it yours</h2><div class="keyboard-tools"><button id="keyboard-page" data-i18n="numbers">Numbers & symbols</button><button id="language-next" aria-label="Next language">English ›</button></div></div>
+        <div id="keyboard" class="keyboard"></div>
+        <div class="keyboard-bottom"><button id="space" data-i18n="space">Space</button><button id="backspace" data-i18n="backspace">Delete last character</button></div>
+      </section>
+      <footer><p id="mode-hint">Use a mouse, touch, or keyboard. Change access mode in Settings.</p><p id="notice" role="status" aria-live="polite" aria-atomic="true">Ready when you are.</p></footer>
+    </main>
+  </div>
+  <div id="gaze-cursor" aria-hidden="true" hidden></div>
+  <dialog id="settings" aria-labelledby="settings-title">
+    <div class="section-heading"><h2 id="settings-title" data-i18n="settings">Make yourself comfortable</h2><button id="settings-close" data-i18n="done">Done</button></div>
+    <p data-i18n="settingsHint">Choose the controls that work best for you. Escape pauses automatic selection.</p>
+    <fieldset><legend data-i18n="accessMode">Access mode</legend><div class="choice-grid" id="access-modes"><button data-mode="manual" aria-pressed="true">Touch / keyboard</button><button data-mode="dwell" aria-pressed="false">Pointer dwell</button><button data-mode="scan" aria-pressed="false">Single switch</button><button data-mode="gaze" aria-pressed="false">Eye tracking</button></div></fieldset>
+    <div class="setting-row"><span id="dwell-label">Dwell time: 1.2 s</span><div><button id="dwell-less" aria-label="Decrease dwell time">−</button><button id="dwell-more" aria-label="Increase dwell time">+</button></div></div>
+    <div class="setting-row"><span id="scan-label">Scan interval: 1.4 s</span><div><button id="scan-less" aria-label="Decrease scan interval">−</button><button id="scan-more" aria-label="Increase scan interval">+</button></div></div>
+    <div class="setting-row"><span data-i18n="textSize">Text size</span><button id="text-size">Standard</button></div>
+    <div class="setting-row"><span data-i18n="contrast">Contrast</span><button id="contrast">Dark</button></div>
+    <div class="setting-row"><span data-i18n="voice">Speaking voice</span><button id="voice-next">Default device voice</button></div>
+    <div class="setting-row"><span id="rate-label">Speech speed: 0.9×</span><div><button id="rate-less" aria-label="Slower speech">−</button><button id="rate-more" aria-label="Faster speech">+</button></div></div>
+    <div class="setting-row"><span data-i18n="calibration">Eye tracking setup</span><button id="calibrate" data-i18n="calibrate">Calibrate</button></div>
+    <p id="speech-info">Voice availability depends on your device. Install a voice for your language in system settings.</p>
+    <p data-i18n="scanHelp">Single switch: press Space to choose the highlighted button. Touch and keyboard controls always work.</p>
+  </dialog>
+  <dialog id="calibration" aria-labelledby="calibration-title"><h2 id="calibration-title">Look at the target</h2><p id="calibration-info">Keep your head comfortable and still.</p><button id="calibration-cancel">Cancel calibration</button><div id="calibration-target" aria-hidden="true"></div></dialog>
 </body>
 </html>
