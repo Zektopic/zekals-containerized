@@ -143,7 +143,10 @@
         "calibrated",
         "needCamera",
         "lookTarget",
-        "calibrationLost"
+        "calibrationLost",
+        "scrollUp",
+        "scrollDown",
+        "joinLetters"
       ],
       "additionalProperties": {
         "type": "string",

@@ -154,7 +154,10 @@
     "calibrated": "已为此窗口保存校准。请先尝试较大的常用语按钮。",
     "needCamera": "请先连接摄像头服务再校准。",
     "lookTarget": "注视目标并保持稳定",
-    "calibrationLost": "校准时追踪丢失，请重试。"
+    "calibrationLost": "校准时追踪丢失，请重试。",
+    "scrollUp": "向上滚动",
+    "scrollDown": "向下滚动",
+    "joinLetters": "连接字符"
   },
   "speech": {
     "locale": "zh-CN",

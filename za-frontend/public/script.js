@@ -12,7 +12,7 @@ let pack, catalog = [], voices = [], voiceIndex = -1, keyboardPage = 0, mode = '
 let lastValue = '', history = [], pointerTarget = null, gazeTarget = null, highlighted = null;
 let tracked = false, lastGaze = 0, rawGaze = null, calibration = null, calibrationRun = null;
 let scanIndex = -1, scanned = null, lastScan = 0, socket, reconnectTimer, reconnectAttempt = 0;
-let languageRequest = 0, blockedTarget = null;
+let languageRequest = 0, blockedTarget = null, pointerX = 0, pointerY = 0, composing = false;
 const dwell = new Dwell(settings.dwell);
 const notices = text => { $('notice').textContent = text; };
 const neuralSpeech = new NeuralSpeech(notices);
@@ -24,10 +24,13 @@ function resetDwell() {
   if (highlighted) { highlighted.classList.remove('dwell-target'); highlighted.style.removeProperty('--dwell-progress'); }
   highlighted = null; dwell.reset();
 }
+function resetScan() {
+  scanned?.classList.remove('scan-target'); scanned = null; scanIndex = -1; lastScan = 0;
+}
 function record(value) {
   if (value === lastValue) return;
   history.push(lastValue); if (history.length > 30) history.shift();
-  lastValue = value; $('message').value = value; updateCount();
+  lastValue = value; if ($('message').value !== value) $('message').value = value; updateCount();
 }
 function updateCount() { $('character-count').textContent = `${$('message').value.length} / 2000`; }
 function append(text) {
@@ -41,7 +44,7 @@ function makeButton(label, action) {
   button.addEventListener('click', action); return button;
 }
 function renderPack() {
-  resetDwell(); document.documentElement.lang = pack.locale || pack.code;
+  resetDwell(); resetScan(); document.documentElement.lang = pack.locale || pack.code;
   document.documentElement.dir = pack.direction || 'ltr';
   $('language-label').textContent = pack.name; $('language-next').textContent = `${pack.name} ›`;
   document.querySelectorAll('[data-i18n]').forEach(element => {
@@ -52,7 +55,7 @@ function renderPack() {
   $('keyboard').replaceChildren();
   const pages = [pack.keyboard.flat(), ...(pack.keyboardPages || []), [...'1234567890.,?!:;+-=()@']];
   const keys = pages[keyboardPage] || pages[0];
-  keys.forEach(key => $('keyboard').append(makeButton(key, () => append(key))));
+  keys.forEach(key => $('keyboard').append(makeButton(key === '\u200d' ? tr('joinLetters', 'Join letters') : /^\p{M}+$/u.test(key) ? '◌' + key : key, () => append(key))));
   $('phrases').replaceChildren();
   const phrases = pack.phrases || ['Yes', 'No', 'Thank you', 'I need help', 'I need water', 'Please wait', 'I am uncomfortable', 'I love you'];
   phrases.forEach(phrase => $('phrases').append(makeButton(phrase, () => append(($('message').value ? ' ' : '') + phrase))));
@@ -105,17 +108,21 @@ function setPaused(value) {
   notices(paused ? tr('paused', 'Automatic selection paused. Touch and keyboard still work.') : tr('ready', 'Ready when you are.'));
 }
 function setMode(value) {
-  mode = value; pointerTarget = gazeTarget = null; resetDwell(); lastScan = 0;
+  mode = value; pointerTarget = gazeTarget = null; resetDwell(); resetScan();
   document.querySelectorAll('[data-mode]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.mode === mode)));
   $('mode-hint').textContent = ({ manual: tr('manualHint', 'Use a mouse, touch, or keyboard. Change access mode in Settings.'),
     dwell: tr('dwellHint', 'Hold the pointer over a button to choose it. Move away before choosing again.'),
     scan: tr('scanHint', 'Press Space to choose the highlighted button. Escape pauses scanning.'),
     gaze: tr('gazeHint', 'Calibrate in Settings before choosing buttons with your eyes.') })[mode];
 }
-$('message').addEventListener('input', () => record($('message').value));
+$('message').addEventListener('compositionstart', () => { composing = true; });
+$('message').addEventListener('compositionend', () => { composing = false; record($('message').value); });
+$('message').addEventListener('input', () => { if (!composing) record($('message').value); else updateCount(); });
 $('speak').onclick = speak; $('stop').onclick = () => { stopSpeaking(); notices(tr('stopped', 'Speech stopped.')); };
 $('clear').onclick = () => { record(''); notices(tr('cleared', 'Message cleared. Undo restores it.')); };
 $('undo').onclick = () => { if (history.length) { lastValue = history.pop(); $('message').value = lastValue; updateCount(); } };
+$('scroll-up').onclick = () => window.scrollBy({ top: -innerHeight * .6, behavior: 'instant' });
+$('scroll-down').onclick = () => window.scrollBy({ top: innerHeight * .6, behavior: 'instant' });
 $('space').onclick = () => append(' ');
 $('backspace').onclick = () => {
   const input = $('message'), start = input.selectionStart, end = input.selectionEnd;
@@ -128,9 +135,9 @@ $('language-next').onclick = () => {
   if (catalog.length) loadLanguage(catalog[(index + 1) % catalog.length].code);
 };
 $('pause').onclick = () => setPaused(!paused);
-$('settings-open').onclick = () => { resetDwell(); $('settings').showModal(); };
-$('settings-close').onclick = () => { resetDwell(); $('settings').close(); };
-$('settings').addEventListener('close', resetDwell);
+$('settings-open').onclick = () => { resetDwell(); resetScan(); $('settings').showModal(); };
+$('settings-close').onclick = () => { resetDwell(); resetScan(); $('settings').close(); };
+$('settings').addEventListener('close', () => { resetDwell(); resetScan(); });
 $('settings').addEventListener('cancel', () => setPaused(true));
 for (const button of document.querySelectorAll('[data-mode]')) button.onclick = () => setMode(button.dataset.mode);
 for (const [id, key, delta, min, max] of [['dwell-less','dwell',-100,500,3000],['dwell-more','dwell',100,500,3000],
@@ -142,17 +149,18 @@ $('contrast').onclick = () => { settings.contrast = !settings.contrast; syncPref
 $('speech-engine').onclick = () => { stopSpeaking(); settings.engine = settings.engine === 'neural' ? 'device' : 'neural'; syncPreferences(); save(); };
 $('voice-next').onclick = () => { if (voices.length) { voiceIndex = (voiceIndex + 1) % voices.length; settings.voice = voices[voiceIndex].voiceURI; save(); refreshVoices(); } };
 window.speechSynthesis?.addEventListener('voiceschanged', refreshVoices);
-document.addEventListener('pointermove', event => { pointerTarget = event.target.closest('button'); });
+document.addEventListener('pointermove', event => { pointerX = event.clientX; pointerY = event.clientY; pointerTarget = event.target.closest('button'); });
 document.addEventListener('pointerout', event => { if (!event.relatedTarget) { pointerTarget = null; resetDwell(); } });
 document.addEventListener('pointerdown', () => { resetDwell(); pointerTarget = null; });
 document.addEventListener('keydown', event => {
   if (event.key === 'Escape') { setPaused(true); stopSpeaking(); }
   if (mode === 'scan' && event.code === 'Space') {
     event.preventDefault();
-    if (!event.repeat && !paused && scanned?.isConnected) { scanned.click(); lastScan = performance.now(); }
+    if (!event.repeat && !paused && !document.hidden && !calibrationRun && allButtons().includes(scanned)) { scanned.click(); lastScan = performance.now(); }
     else if (!event.repeat && paused) setPaused(false);
   }
 });
+window.addEventListener('scroll', () => { pointerTarget = document.elementFromPoint(pointerX, pointerY)?.closest('button'); gazeTarget = null; resetDwell(); }, { passive: true });
 document.addEventListener('visibilitychange', () => { if (document.hidden) { setPaused(true); stopSpeaking(); } });
 window.addEventListener('resize', () => { calibration = null; resetDwell(); });
 function invalidateGaze() { tracked = false; gazeTarget = null; $('gaze-cursor').hidden = true; if (mode === 'gaze') resetDwell(); }

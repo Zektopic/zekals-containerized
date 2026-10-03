@@ -129,7 +129,10 @@
     "calibrated": "Calibration enregistrée pour cette fenêtre. Essayez d’abord les grandes phrases.",
     "needCamera": "Connectez le service caméra avant de calibrer.",
     "lookTarget": "Regardez la cible sans bouger",
-    "calibrationLost": "Suivi perdu pendant la calibration. Réessayez."
+    "calibrationLost": "Suivi perdu pendant la calibration. Réessayez.",
+    "scrollUp": "Défiler vers le haut",
+    "scrollDown": "Défiler vers le bas",
+    "joinLetters": "Lier les lettres"
   },
   "speech": {
     "locale": "fr-FR",

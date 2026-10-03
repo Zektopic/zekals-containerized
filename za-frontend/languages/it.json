@@ -122,7 +122,10 @@
     "calibrated": "Calibrazione salvata per questa finestra. Prova prima le frasi grandi.",
     "needCamera": "Collega il servizio fotocamera prima della calibrazione.",
     "lookTarget": "Guarda il bersaglio senza muoverti",
-    "calibrationLost": "Tracciamento perso durante la calibrazione. Riprova."
+    "calibrationLost": "Tracciamento perso durante la calibrazione. Riprova.",
+    "scrollUp": "Scorri su",
+    "scrollDown": "Scorri giù",
+    "joinLetters": "Unisci lettere"
   },
   "speech": {
     "locale": "it-IT",

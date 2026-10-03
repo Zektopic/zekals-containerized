@@ -6,15 +6,15 @@ available Linux x86_64 development host from hardware or user testing.
 | Check | Result |
 | --- | --- |
 | Production Node server and logic tests | 11 passing: HTTP, origin/path restrictions, WebSockets, dwell, Unicode, calibration, speech and language validation |
-| Chromium interaction/accessibility tests | 8 passing: composition, undo, dwell locking, switch pause, mobile layout, axe checks and priority-language phrase entry |
-| Python tracker tests | 6 passing: real socket, remote token requirement, staleness, filter parity and provider selection |
-| Rust | 3 unit tests passing; formatting and Clippy clean; release library built |
+| Chromium interaction/accessibility tests | 12 passing, including calibration/loss cancellation, Sinhala key labels, IME composition/undo and switch isolation inside Settings |
+| Python tracker tests | 7 passing, including the real WebSocket stream and corrupted-state recovery |
+| Rust | 4 unit tests passing; formatting and Clippy clean; release library built |
 | Real camera model | Pinned MediaPipe model initialized on CPU; blank image produced no gaze |
 | Real neural synthesis | Piper English voice generated a 22,050 Hz WAV (115,244 bytes, 2.61 seconds) |
 | JavaScript dependency audit | No known vulnerabilities reported for the resolved dependency tree |
 | Python camera/speech dependency audit | No known vulnerabilities reported for the resolved requirements |
 | Shell/Compose | Bash syntax checks and default Compose validation pass |
-| UI container | Production Docker image built locally |
+| UI container | Production Docker image built; restricted container served health, UI, modules and languages |
 | Filter measurement | Python ~1.36 µs/sample; Rust via ctypes ~1.45 µs/sample on this run; no speedup claim |
 
 Commands and benchmark data are in the development/hardware guides. Dependency

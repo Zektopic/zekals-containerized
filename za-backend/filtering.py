@@ -36,7 +36,8 @@ class GazeFilter:
             self.state = State()
         else:
             elapsed = timestamp_ms - self.state.timestamp_ms
-            alpha = elapsed / (self.tau_ms + elapsed) if self.state.valid and 0 < elapsed <= 500 else 1
-            self.state = State(self.state.x + alpha * (x - self.state.x),
-                               self.state.y + alpha * (y - self.state.y), timestamp_ms, 1)
+            alpha = elapsed / (self.tau_ms + elapsed) if self.state.valid and all(math.isfinite(v) for v in (self.state.x, self.state.y, self.state.timestamp_ms)) and 0 < elapsed <= 500 else 1
+            self.state = State(x, y, timestamp_ms, 1) if alpha == 1 else State(
+                self.state.x + alpha * (x - self.state.x),
+                self.state.y + alpha * (y - self.state.y), timestamp_ms, 1)
         return (self.state.x, self.state.y) if self.state.valid else None

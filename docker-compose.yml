@@ -8,6 +8,8 @@ services:
       TRACKER_URL: ${TRACKER_URL:-}
       TRACKER_TOKEN: ${TRACKER_TOKEN:-}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:8080,http://127.0.0.1:8080,http://localhost:3000}
+      PIPER_URL: ${PIPER_URL:-}
+      PIPER_VOICES: ${PIPER_VOICES:-}
       LANGUAGE: ${LANGUAGE:-en}
     init: true
     read_only: true

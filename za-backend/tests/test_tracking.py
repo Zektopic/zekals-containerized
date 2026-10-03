@@ -6,7 +6,7 @@ import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from eye_tracker import Pipeline, Sample, serve_pipeline
-from filtering import GazeFilter
+from filtering import GazeFilter, State
 from inference import select_providers, verify_model
 
 
@@ -24,6 +24,12 @@ class TrackingTests(unittest.TestCase):
         self.assertEqual(select_providers(["OpenVINOExecutionProvider"], "npu", "NPU")[0],
                          ("OpenVINOExecutionProvider", {"device_type": "NPU"}))
         self.assertEqual(select_providers(["CUDAExecutionProvider"], "cpu"), [("CPUExecutionProvider", {})])
+
+    def test_corrupted_filter_state_recovers(self):
+        for enabled in (False, True):
+            filter_ = GazeFilter(native=enabled)
+            filter_.state = State(float("nan"), float("inf"), float("nan"), 1)
+            self.assertEqual(filter_.step(0.2, 0.8, 10), (0.2, 0.8))
 
     def test_checksum_required(self):
         with self.assertRaises(ValueError):
