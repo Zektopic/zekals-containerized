@@ -1,2 +1,2 @@
 # Minimal stream runtime. Camera inference is an optional installation.
-websockets==17.1
+websockets==17.2
