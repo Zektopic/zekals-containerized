@@ -11,9 +11,11 @@ concurrency:
   cancel-in-progress: true
 jobs:
   ui:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, manupa-hnx]
     steps:
       - uses: actions/checkout@v7
+      - name: Configure Git safe directory
+        run: git config --global --add safe.directory '*'
       - uses: actions/setup-node@v7
         with:
           node-version: '22'
@@ -24,9 +26,11 @@ jobs:
       - run: docker compose config --quiet
       - run: docker build -t zekals-ui:test za-frontend
   tracking:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, manupa-hnx]
     steps:
       - uses: actions/checkout@v7
+      - name: Configure Git safe directory
+        run: git config --global --add safe.directory '*'
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
@@ -35,9 +39,11 @@ jobs:
       - run: pip install -r za-backend/requirements.txt
       - run: python -m unittest discover -s za-backend/tests -v
   accessibility:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, manupa-hnx]
     steps:
       - uses: actions/checkout@v7
+      - name: Configure Git safe directory
+        run: git config --global --add safe.directory '*'
       - uses: actions/setup-node@v7
         with:
           node-version: '22'
