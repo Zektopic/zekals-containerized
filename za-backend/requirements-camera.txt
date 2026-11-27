@@ -1,4 +1,4 @@
 -r requirements.txt
 numpy==2.5.5
-opencv-contrib-python==5.0.0.93
+opencv-contrib-python==5.1.0.95
 mediapipe==1.2.3
